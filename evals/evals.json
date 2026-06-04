@@ -1,0 +1,65 @@
+{
+  "skill_name": "salvo-skill",
+  "evals": [
+    {
+      "id": 0,
+      "name": "rest-crud-with-openapi",
+      "prompt": "用 Salvo 写一个文章管理的 REST 接口：\n- GET /articles 列表\n- POST /articles 新建（接收 JSON：title、body）\n- GET /articles/{id} 详情\n- DELETE /articles/{id} 删除\n\n要求：用 PostgreSQL（sqlx），连接池注入到 depot，跑在 0.0.0.0:5800，自动生成 OpenAPI 文档挂在 /swagger 上。给我完整的 Cargo.toml + main.rs，能直接 cargo run。",
+      "expected_output": "Cargo.toml + src/main.rs。Cargo.toml 必须包含 salvo 0.93.x 且开启 oapi/affix-state/logging 等所需 feature。main.rs 必须包含 4 个 endpoint、PgPool 注入、OpenAPI router 注册、SwaggerUi 挂载。",
+      "files": [],
+      "assertions": [
+        {"text": "Cargo.toml declares salvo = 0.93.x"},
+        {"text": "salvo features include oapi"},
+        {"text": "salvo features include affix-state"},
+        {"text": "sqlx is declared with postgres + runtime-tokio"},
+        {"text": "Uses curly-brace path parameter syntax {id} (not <id>/:id)"},
+        {"text": "Uses #[endpoint] for OpenAPI-aware handlers"},
+        {"text": "Injects connection pool via affix_state"},
+        {"text": "Reads pool via depot.obtain"},
+        {"text": "Listens on 0.0.0.0:5800"},
+        {"text": "Mounts SwaggerUi at /swagger"},
+        {"text": "OpenApi::new(...).merge_router(&...) is called"},
+        {"text": "Implements all four endpoints"},
+        {"text": "JsonBody / typed extractor used for POST body"}
+      ]
+    },
+    {
+      "id": 1,
+      "name": "websocket-broadcast-chat",
+      "prompt": "帮我写一个最小可用的 Salvo WebSocket 群聊：所有连接到 /ws 的客户端，发送的文本消息都广播给其它在线连接。要包含一个简单的 HTML 测试页面挂在 / 路径。给我能直接 cargo run 的单文件实现。",
+      "expected_output": "单 main.rs。要点：使用 WebSocketUpgrade、tokio::sync::broadcast 做 fan-out、tokio::select! 同时收发、Router::with_path(\"ws\").goal(...) 而不是 .get(...)、Cargo.toml 启用 websocket feature。",
+      "files": [],
+      "assertions": [
+        {"text": "Cargo.toml enables websocket feature"},
+        {"text": "Cargo.toml depends on tokio with macros + rt-multi-thread"},
+        {"text": "Uses WebSocketUpgrade::new().upgrade(...)"},
+        {"text": "Uses .goal(...) on the /ws route, not .get(...)"},
+        {"text": "Broadcast fan-out uses tokio::sync::broadcast"},
+        {"text": "Handles bidirectional with tokio::select!"},
+        {"text": "Shares the broadcast Sender across connections"},
+        {"text": "Serves HTML page at / containing a `new WebSocket(` JS"},
+        {"text": "Handles client disconnect cleanly"},
+        {"text": "Listens on a Salvo-conventional address (port 5800)"},
+        {"text": "Single-file implementation as requested"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "jwt-protected-endpoint",
+      "prompt": "我有一个 Salvo 项目（0.93.0），已经有 /login 这个公开 endpoint。现在我要加一个受保护的 /me endpoint，规则是：\n- 客户端必须在 Authorization: Bearer <token> 里带 HS256 JWT\n- 校验通过后返回 token 里的 sub 字段\n- 校验失败返回 401\n\n请只给我「需要新增/修改的代码片段」（包括 Cargo.toml 改动、JWT 中间件构造、handler、router 接入），不要重复完整的 main.rs 框架。",
+      "expected_output": "Cargo.toml 新增 jwt-auth feature、ConstDecoder + HeaderFinder 配置、JwtAuth 中间件挂在 /me 路由上、handler 用 depot.jwt_auth_data::<Claims>() 取 claim、错误返回 StatusError::unauthorized()。**不要**重复完整 main.rs。",
+      "files": [],
+      "assertions": [
+        {"text": "Cargo.toml change adds jwt-auth feature"},
+        {"text": "Does NOT repeat a full main.rs framework (incremental delta only)"},
+        {"text": "Uses ConstDecoder for HS256"},
+        {"text": "Configures HeaderFinder for Authorization header"},
+        {"text": "Defines a Claims struct with sub field"},
+        {"text": "Attaches JwtAuth middleware to /me route via hoop"},
+        {"text": "Reads claims via depot.jwt_auth_data::<Claims>()"},
+        {"text": "Returns 401 on auth failure"},
+        {"text": "Uses HS256 (default for ConstDecoder)"}
+      ]
+    }
+  ]
+}
