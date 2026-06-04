@@ -1,0 +1,14 @@
+{
+  "name": "salvo-skill",
+  "owner": { "name": "waydone", "email": "coco18889@icloud.com" },
+  "metadata": { "description": "Salvo (Rust web framework) specialist skill — target 0.93.0", "version": "0.1.0" },
+  "plugins": [
+    {
+      "name": "salvo-skill",
+      "source": "./",
+      "description": "Salvo (Rust web framework) specialist — 0.93.0 API surface, Context7-before-non-trivial-code rule, cargo-check verified. Routing, handlers, Writer/Scribe, extractors, JwtAuth, middleware, OpenAPI, WebSocket/SSE, static files, testing, ops.",
+      "category": "development",
+      "tags": ["rust", "salvo", "web-framework", "backend", "api", "skill"]
+    }
+  ]
+}

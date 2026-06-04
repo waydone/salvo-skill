@@ -20,3 +20,8 @@ Every load-bearing API across `SKILL.md` + all `references/*.md` was checked two
 - `rust-idioms` — Rust language-layer idioms/design/compiler-error diagnosis (the non-framework half).
 
 Zero hooks / zero MCP / zero extra permissions — pure reference text loaded on demand.
+
+## Install
+
+- **As a plugin (marketplace):** `/plugin marketplace add waydone/salvo-skill`, then `/plugin install salvo-skill@salvo-skill`.
+- **Local (symlink):** `ln -sfn /Users/coco/Documents/code/salvo/salvo-skill/skills/salvo-skill ~/.claude/skills/salvo-skill`.
