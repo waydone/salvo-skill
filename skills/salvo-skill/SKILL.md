@@ -55,14 +55,14 @@ version = "0.1.0"
 edition = "2024"   # ⚠️ for NEW projects use 2024 (current, Rust 1.85+). Do NOT reflexively write "2021" — that's a stale training-data default. For an EXISTING project, match whatever its Cargo.toml already declares.
 
 [dependencies]
-salvo = { version = "0.93.0", features = ["full"] }
+salvo = { version = "0.93.0", features = ["full"] } # add "size-limiter" explicitly for upload/body caps
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 ```
 
-`features = ["full"]` is fine for prototyping. For production, switch to a curated list — see `references/cargo-features.md`. Common minimal sets:
+`features = ["full"]` is fine for prototyping, but it does not include `size-limiter`. For production, switch to a curated list — see `references/cargo-features.md`. Common minimal sets:
 
 - REST API w/ OpenAPI: `["oapi", "logging", "affix-state"]`
 - WebSocket service: `["websocket", "logging"]`
@@ -183,7 +183,7 @@ async fn create(json: JsonBody<NewUser>) -> Json<User> {
 }
 ```
 
-Available: `JsonBody<T>`, `FormBody<T>`, `QueryParam<T, REQUIRED>`, `PathParam<T>`, `HeaderParam<T, REQUIRED>`, `CookieParam<T, REQUIRED>` — all in `salvo::oapi::extract` (oapi feature) / `salvo::extract` (without oapi), **not** in `salvo::prelude`.
+Available: `JsonBody<T>`, `FormBody<T>`, `QueryParam<T, REQUIRED>`, `PathParam<T>`, `HeaderParam<T, REQUIRED>`, `CookieParam<T, REQUIRED>` — all in `salvo::oapi::extract` (requires `oapi`), **not** in `salvo::prelude`. Without `oapi`, use `Request` methods or `Extractible` derive instead.
 
 **3. `Extractible` derive (for mixed-source structs):**
 
@@ -276,7 +276,7 @@ Read these only when the task touches the topic. Each file is self-contained —
 | `references/middleware-state.md` | Writing custom middleware, `FlowCtrl`, DI patterns, scoped state |
 | `references/error-handling.md` | Custom error envelopes, `Catcher`, 404 pages |
 | `references/auth-security.md` | JWT, basic auth, sessions, CSRF, CORS, rate limiting, TLS/ACME |
-| `references/openapi.md` | `#[endpoint]`, `ToSchema`, `ToParameters`, SwaggerUI / Scalar / Rapidoc / Redoc setup |
+| `references/openapi.md` | `#[endpoint]`, `ToSchema`, `ToParameters`, SwaggerUi / Scalar / RapiDoc / ReDoc setup |
 | `references/realtime.md` | WebSocket, SSE, broadcast patterns |
 | `references/database.md` | SQLx / SeaORM / Diesel integration via `affix_state` |
 | `references/files.md` | Static directories, embedded assets (rust-embed), file uploads |
@@ -293,12 +293,12 @@ These come up repeatedly in AI-generated Salvo code. Catch them in your own outp
 2. **Forgetting Cargo features**: writing `JwtAuth::new(...)` without `features = ["jwt-auth"]` (or `"full"`) → "cannot find struct" compile error. When you reach for a non-core type, mention the feature flag inline.
 3. **Returning raw `anyhow::Error`** without enabling the `anyhow` feature → no `Writer` impl, won't compile.
 4. **Mixing `axum`/`actix` idioms**: Salvo handlers don't use tuple extractors or the `State<T>` wrapper. State comes from `Depot`, not function parameters of type `State<...>`.
-5. **Building `Router` with `Router::new().path(...)`**: `.path()` is for filters, not URL paths. Use `Router::with_path("...")` to set a path, or `.push(Router::with_path("..."))` to nest.
+5. **Overusing `Router::new().path(...)`**: it is valid, but `Router::with_path("...")` is clearer for a new route node and matches Salvo's docs/examples. Use `.path(...)` mainly when adding a path filter to an already-built router chain.
 6. **Forgetting `.bind().await`** on `TcpListener::new(addr)` — without it, the listener isn't actually bound; you'll get a confusing future-not-Send error.
 7. **Using `goal()` when you mean `get()`**: `goal()` matches **regardless of method or sub-path** — handy for `Router::with_path("ws").goal(connect)` (WebSocket upgrade), but a footgun for plain GET endpoints. If unsure, use `.get()`.
 8. **Hand-rolling JSON error responses** when `StatusError` does it. Prefer `StatusError` unless the user explicitly wants a custom error envelope.
-9. **Pattern-matching `salvo::websocket::Message`**: `match msg { Message::Text(t) => ... }` is **0.65-and-older syntax**. In 0.92 `Message` is an opaque struct — use `msg.is_text()`, `msg.as_str()`, `Message::text(s)`, `Message::binary(v)`. Lots of stale tutorials online still use the enum; ignore them.
-10. **Splitting the WebSocket with `futures_util::StreamExt::split`**: works in some versions but the canonical 0.92 path is `ws.recv()` / `ws.send(...)` directly inside the upgrade closure. Reach for `split` only when you genuinely need to drive sender and receiver from separate tasks — usually `tokio::select!` over `recv()` + a `broadcast::Receiver` is simpler.
+9. **Pattern-matching `salvo::websocket::Message`**: `match msg { Message::Text(t) => ... }` is **0.65-and-older syntax**. In 0.93 `Message` is an opaque struct — use `msg.is_text()`, `msg.as_str()`, `Message::text(s)`, `Message::binary(v)`. Lots of stale tutorials online still use the enum; ignore them.
+10. **Splitting the WebSocket with `futures_util::StreamExt::split`**: works in some versions but the canonical 0.93 path is `ws.recv()` / `ws.send(...)` directly inside the upgrade closure. Reach for `split` only when you genuinely need to drive sender and receiver from separate tasks — usually `tokio::select!` over `recv()` + a `broadcast::Receiver` is simpler.
 
 ## Output expectations
 

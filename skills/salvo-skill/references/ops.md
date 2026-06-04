@@ -38,13 +38,13 @@ Slow handlers get a 408. Apply per-route for finer granularity (long uploads nee
 ## Concurrency limit (feature `concurrency-limiter`)
 
 ```rust
-use salvo::concurrency_limiter::ConcurrencyLimiter;
-let app = Router::new().hoop(ConcurrencyLimiter::new(100)).push(/* */);
+use salvo::concurrency_limiter::max_concurrency;
+let app = Router::new().hoop(max_concurrency(100)).push(/* */);
 ```
 
-Bounds in-flight requests. Excess requests are queued (or dropped — check the API).
+Bounds in-flight requests. Excess requests get a 429 when no permit is available.
 
-## Compression (features `compression*`)
+## Compression (feature `compression`)
 
 ```rust
 use salvo::compression::Compression;
@@ -59,7 +59,7 @@ let comp = Compression::new()
 let app = Router::new().hoop(comp).get(home);
 ```
 
-Each algorithm needs its own feature: `compression-gzip`, `compression-brotli`, `compression-zstd`, `compression-deflate`. Enable only what you'll use — compile time matters.
+Salvo 0.93 exposes one top-level `compression` feature; enable only if you actually serve compressible responses — compile time matters.
 
 `min_length` is critical: compressing a 50-byte response loses bytes, doesn't gain them.
 
@@ -108,7 +108,7 @@ use salvo::proxy::Proxy;
 
 let app = Router::new()
     .push(
-        Router::with_path("api/{**}")
+        Router::with_path("api/{**rest}")
             .goal(Proxy::use_hyper_client(["http://upstream-1:8080", "http://upstream-2:8080"]))
     );
 ```
@@ -146,8 +146,8 @@ Browsers require **the same port for HTTP/2 and HTTP/3** to upgrade automaticall
 ## Force HTTPS (feature `force-https`)
 
 ```rust
-use salvo::force_https::force_https;
-let app = Service::new(router).hoop(force_https);
+use salvo::force_https::ForceHttps;
+let app = Service::new(router).hoop(ForceHttps::new());
 ```
 
 Or run a separate HTTP listener on :80 that 301s to the HTTPS one.

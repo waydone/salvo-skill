@@ -1,6 +1,6 @@
 # Testing (feature `test`)
 
-Salvo ships a `TestClient` that drives a `Service` in-process — no real socket involved. It's fast and gives you full control over headers, bodies, and assertions.
+Salvo ships a `TestClient` that drives a `Service` in-process — no real socket involved. It's fast and gives you full control over headers, bodies, and assertions. The `test` feature is enabled by Salvo's default features; list it explicitly when `salvo` is only a dev-dependency or when you disable default features.
 
 ```toml
 [dev-dependencies]

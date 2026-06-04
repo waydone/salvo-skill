@@ -59,6 +59,7 @@ For RSA / ECDSA decoders use `RsaDecoder`, `EcdsaDecoder`. For dynamic keys (e.g
 ## Basic auth (feature `basic-auth`)
 
 ```rust
+use salvo::prelude::*;
 use salvo::basic_auth::{BasicAuth, BasicAuthValidator};
 
 struct Validator;
@@ -81,7 +82,8 @@ use salvo::session::{SessionHandler, MemoryStore, SessionDepotExt};
 // or RedisStore from salvo-session crate / community store
 
 let store = MemoryStore::new();
-let session = SessionHandler::builder(store, b"a-32-byte-or-longer-secret-here-please")
+let session_secret = [7_u8; 64]; // minimum 64 bytes; shorter keys panic
+let session = SessionHandler::builder(store, &session_secret)
     .cookie_name("sid")
     .build()?;
 
@@ -119,13 +121,16 @@ For dev (`*` origin), use `.allow_origin(AllowOrigin::any())` (there is no `Cors
 ```rust
 use salvo::csrf::*;
 
-let csrf = Csrf::new(BcryptCipher::new(), CookieStore::new())
-    .skipper(|req, _| req.method() == "GET" || req.method() == "HEAD" || req.method() == "OPTIONS");
+let csrf = Csrf::new(
+    BcryptCipher::new(),
+    CookieStore::new(),
+    FormFinder::new("csrf_token"),
+);
 
 let app = Router::new().hoop(csrf).get(form_page).post(submit);
 ```
 
-In templates, read the token from `Depot` (set by the middleware) and put it in a hidden form field.
+The default skipper already ignores safe methods and validates `POST` / `PATCH` / `DELETE` / `PUT`. In templates, read `depot.csrf_token()` (via `CsrfDepotExt`) and put it in a hidden form field named to match the finder.
 
 ## Rate limiting (feature `rate-limiter`)
 
@@ -161,9 +166,9 @@ let acceptor = TcpListener::new("0.0.0.0:443").rustls(config.clone()).bind().awa
 Server::new(acceptor).serve(router).await;
 ```
 
-For HTTP→HTTPS redirect on a separate listener, use `salvo::force_https::force_https` or the `force-https` feature middleware on the HTTP listener.
+For HTTP→HTTPS redirect on a separate listener, use `salvo::force_https::ForceHttps::new()` on the HTTP listener or service.
 
-## ACME / Let's Encrypt (feature `acme`)
+## ACME / Let's Encrypt (feature `acme`; add `quinn` if using `.quinn(...)`)
 
 ```rust
 let acceptor = TcpListener::new("0.0.0.0:443")

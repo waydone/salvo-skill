@@ -50,22 +50,22 @@ Router::with_path("users").get(list).post(create);
 Router::with_path("users/{id}").get(show).put(update).patch(patch).delete(remove);
 ```
 
-If you need a method without a shortcut (e.g. `LINK`), use `filter`:
+If you need a method without a shortcut (e.g. `LINK`), use `filter_fn` and set the handler with `goal`:
 
 ```rust
-use salvo::routing::filters;
-Router::with_path("links").filter(filters::method(Method::LINK)).handle(link_handler);
+Router::with_path("links")
+    .filter_fn(|req, _path_state| req.method().as_str() == "LINK")
+    .goal(link_handler);
 ```
 
-## `get` vs `goal` vs `handle`
+## `get` vs `goal`
 
 | Method | When to use |
 |---|---|
 | `.get(h)` / `.post(h)` / etc | The handler runs **only if** the method matches AND no further sub-path. Most cases. |
-| `.handle(h)` | Like `.get` but matches **any** method. Useful when the same function handles multiple methods internally. |
 | `.goal(h)` | Matches **anything** at this node — any method, any sub-path. Use for catch-alls and WebSocket upgrade paths (`Router::with_path("ws").goal(connect)`). |
 
-`.goal` is a footgun if used by accident — it'll swallow paths you didn't expect. When in doubt, use `.get` / `.post` / etc.
+There is no `Router::handle(...)` in 0.93.0. `.goal` is a footgun if used by accident — it'll swallow paths you didn't expect. When in doubt, use `.get` / `.post` / etc.
 
 ## Nesting (`push`)
 
@@ -93,11 +93,12 @@ A child inherits its parents' filters. The middleware order is parent-to-child. 
 
 ```rust
 use salvo::routing::filters;
+use salvo::routing::Filter;
 
 Router::new()
     .filter(filters::host("api.example.com"))
     .filter(filters::scheme(salvo::http::uri::Scheme::HTTPS))   // scheme() takes a Scheme, NOT &str
-    .filter(filters::header("x-tenant"))
+    .filter_fn(|req, _path_state| req.header::<String>("x-tenant").is_some())
     .filter_fn(|req, _path_state| req.header::<String>("x-version") == Some("v2".into())); // 2nd arg is &mut PathState, not Depot
 ```
 

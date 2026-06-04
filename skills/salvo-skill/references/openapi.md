@@ -60,7 +60,7 @@ Visit:
 - `/swagger` — Swagger UI
 - `/scalar` — Scalar UI (modern alternative)
 
-`Rapidoc` and `Redoc` are also available with the same `.into_router(...)` pattern.
+`RapiDoc` and `ReDoc` are also available with the same `.into_router(...)` pattern.
 
 ## `#[endpoint]` vs `#[handler]`
 
@@ -147,7 +147,7 @@ Then on protected endpoints add `security(["bearer" = []])`.
 2. **`merge_router` order**: it must come **after** all routes are pushed to the router. Build the API router first, then merge.
 3. **Mounting the doc router under the main router**: a footgun if your main router has a path prefix, since the doc URL gets prefixed too. Either keep the doc router at the top level, or include the prefix in the SwaggerUi/Scalar URL.
 4. **`#[endpoint]` outside an `oapi`-enabled crate**: compile error. Either enable the feature or fall back to `#[handler]`.
-5. **`JsonBody<T>` from `salvo::extract` vs `salvo::oapi::extract`**: the `oapi` version registers schemas. With `oapi` on, always import from `salvo::oapi::extract::*` (or just use the prelude).
+5. **Missing extractor imports**: `JsonBody<T>` / `PathParam<T>` / `QueryParam<T, _>` live in `salvo::oapi::extract`, not `salvo::prelude`, and not `salvo::extract` in 0.93.0.
 6. **Long-lived borrows in DTOs**: don't use `&'a str` in `ToSchema`-derived types — `serde_json` deserialization plus schema generation needs owned types.
 
 ## When the user wants OpenAPI for an existing app

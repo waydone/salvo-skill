@@ -43,7 +43,7 @@ async fn show(depot: &mut Depot, id: PathParam<i64>) -> String { /* ... */ }
 async fn search(q: QueryParam<String, true>, page: QueryParam<u32, false>) -> Json<Vec<User>> { /* ... */ }
 ```
 
-See `data-extraction.md` for the full extractor list. These extractor types live in `salvo::oapi::extract` (oapi feature) or `salvo::extract` (without oapi) — they are **not** re-exported by `salvo::prelude`, so paste-ready code must import them.
+See `data-extraction.md` for the full extractor list. These extractor types live in `salvo::oapi::extract` and require the `oapi` feature — they are **not** re-exported by `salvo::prelude`, so paste-ready code must import them. Without `oapi`, use `Request` methods or `Extractible` derive instead.
 
 ## Return types — what implements `Writer`
 
@@ -86,6 +86,8 @@ For streaming bodies:
 res.stream(my_stream);
 ```
 
+If you construct byte chunks yourself, add `bytes = "1"` to `Cargo.toml`.
+
 For raw bytes with explicit content type:
 
 ```rust
@@ -97,6 +99,7 @@ res.body(pdf_bytes);
 
 ```rust
 use futures_util::stream::iter;
+use bytes::Bytes;
 use std::convert::Infallible;
 
 #[handler]
@@ -134,6 +137,6 @@ For an error counterpart, see `error-handling.md`.
 
 ## Common pitfalls
 
-- **`async fn` is mandatory**. `#[handler] fn ...` won't compile.
+- Prefer `async fn` for handlers, because real handlers usually await I/O. Plain `#[handler] fn ...` still compiles when no await is needed.
 - **No `Self` in `#[handler]` on impls**. For struct methods, use `#[craft]` (requires `craft` feature) or wrap the call inside a free function that obtains the receiver from `Depot`.
 - **`'static` constraints**: types captured by closures inside handlers must be `Send + 'static`. Wrap non-`Sync` state in `Arc<Mutex<...>>` (or prefer immutable shared state).

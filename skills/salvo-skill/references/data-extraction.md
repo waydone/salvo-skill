@@ -32,7 +32,7 @@ The `bool` const generic on `QueryParam` / `HeaderParam` / `CookieParam` is `REQ
 - `QueryParam<T, true>` — fail with 400 if missing
 - `QueryParam<T, false>` — yields `Option<T>`-ish via `.into_inner()`
 
-These types are in `salvo::oapi::extract` (need the `oapi` feature) **or** in `salvo::extract` (without `oapi`). With `oapi` on, they double as schema sources for OpenAPI generation — always prefer the `oapi` ones if you have the feature.
+These types are in `salvo::oapi::extract` and need the `oapi` feature. They double as schema sources for OpenAPI generation. Without `oapi`, use `Request` methods or `Extractible` derive instead; `salvo::extract` does not provide these `JsonBody` / `PathParam` / `QueryParam` wrapper types in 0.93.0.
 
 ## 2. `Extractible` derive (mixed sources, complex shapes)
 
@@ -162,7 +162,7 @@ async fn upload(req: &mut Request) -> Result<String, StatusError> {
 }
 ```
 
-`req.file("name")` returns `Option<FilePart>`. For multiple files under one field name use `req.files("name")`.
+`req.file("name")` returns `Option<&FilePart>`. For multiple files under one field name use `req.files("name")`, which returns `Option<&Vec<FilePart>>`.
 
 `FilePart` exposes:
 - `.path()` — the temp file on disk

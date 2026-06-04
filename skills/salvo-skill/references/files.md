@@ -125,20 +125,22 @@ async fn upload(req: &mut Request) -> Result<Json<Vec<String>>, StatusError> {
     }
 
     // multiple files under same field name
-    for file in req.files("attachments").await.into_iter().flatten() {
-        let dest = std::path::PathBuf::from("./uploads")
-            .join(file.name().unwrap_or("upload.bin"));
-        std::fs::copy(file.path(), &dest).ok();
-        saved.push(dest.display().to_string());
+    if let Some(files) = req.files("attachments").await {
+        for file in files {
+            let dest = std::path::PathBuf::from("./uploads")
+                .join(file.name().unwrap_or("upload.bin"));
+            std::fs::copy(file.path(), &dest).ok();
+            saved.push(dest.display().to_string());
+        }
     }
 
     Ok(Json(saved))
 }
 ```
 
-`req.file("name")` returns `Option<FilePart>`. `req.files("name")` returns `Option<Vec<FilePart>>`.
+`req.file("name")` returns `Option<&FilePart>`. `req.files("name")` returns `Option<&Vec<FilePart>>`.
 
-`FilePart` exposes `.path()` (temp path), `.name()` (original filename), `.content_type()`, `.headers()`, `.size()`. The temp file is deleted when the **`FilePart`** drops (not when `Request` drops), so persist it before the `FilePart` goes out of scope — or call `file.do_not_delete_on_drop()` to manage cleanup yourself.
+`FilePart` exposes `.path()` (temp path), `.name()` (original filename), `.content_type()`, `.headers()`, `.size()`. The temporary file is owned by the request's parsed multipart data and is removed when the underlying `FilePart` drops, so copy or move it before the handler returns.
 
 ## Upload size limit
 
@@ -152,4 +154,4 @@ let app = Router::new()
     .push(/* routes */);
 ```
 
-`max_size(bytes)` is a helper fn returning a `MaxSize` middleware that checks the declared `content-length`. When you can't trust the declared length (chunked bodies), use the **`SecureMaxSize` struct** — there is no `secure_max_size()` helper fn; construct it directly: `.hoop(salvo::http::request::SecureMaxSize::new(20 * 1024 * 1024))`. It enforces the limit against the bytes actually read.
+`max_size(bytes)` is a helper fn returning a `MaxSize` middleware that checks the request body's upper size hint and rejects unknown sizes. For the actual body-read/form-parser cap, use the **`SecureMaxSize` struct** — there is no `secure_max_size()` helper fn; construct it directly: `.hoop(salvo::http::request::SecureMaxSize::new(20 * 1024 * 1024))`.

@@ -2,35 +2,34 @@
 
 The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salvo-oapi`, etc. Every non-core capability is gated behind a feature flag. **Forgetting a feature is the most common compile error in AI-generated Salvo code.**
 
-`features = ["full"]` enables everything. Use it for prototyping. For production, prune to what you actually use — it cuts compile time and binary size meaningfully.
+`features = ["full"]` enables most optional Salvo modules and is fine for prototyping. It does **not** include `size-limiter`; add that explicitly for upload/body caps. For production, prune to what you actually use — it cuts compile time and binary size meaningfully.
 
 ## Feature → re-exports cheatsheet
 
-| Feature | Unlocks (typical types in `salvo::prelude`) | When you need it |
+| Feature | Unlocks (typical imports) | When you need it |
 |---|---|---|
 | `cookie` | `Cookie`, `CookieJar`, `Response::with_cookies` | Anything reading or setting cookies |
 | `affix-state` | `affix_state::inject`, `insert` | DI, sharing app state across handlers (almost always on) |
 | `logging` | `Logger` middleware | Request logging |
-| `compression` | `Compression`, `CompressionAlgo`, `CompressionLevel` (gzip default) | Response compression |
-| `compression-brotli` / `-gzip` / `-zstd` / `-deflate` | algorithm-specific encoders | Picking specific compression backends |
+| `compression` | `Compression`, `CompressionAlgo`, `CompressionLevel` | Response compression (gzip/brotli/zstd/deflate support is inside this feature) |
 | `serve-static` | `StaticFile`, `StaticDir` | Serving static assets / SPA |
-| `cors` | `Cors`, `CorsLayer` builders | Browser cross-origin access |
+| `cors` | `Cors`, `AllowOrigin`, `AllowHeaders` builders | Browser cross-origin access |
 | `csrf` | `Csrf`, `CsrfStore`, `CsrfCipher` | Form-based CSRF protection |
 | `jwt-auth` | `JwtAuth`, `JwtAuthDecoder`, `ConstDecoder`, `RsaDecoder`, etc. | JWT bearer auth |
 | `basic-auth` | `BasicAuth`, `BasicAuthValidator` | Basic auth |
 | `session` | `SessionHandler`, `Session`, `SessionStore` | Stateful sessions |
 | `flash` | `FlashStore`, `Flash` | One-shot redirect-survival messages |
 | `rate-limiter` | `RateLimiter`, quota types | Per-IP/route rate limits |
-| `concurrency-limiter` | `ConcurrencyLimiter` | Bound in-flight requests |
+| `concurrency-limiter` | `max_concurrency` / `MaxConcurrency` | Bound in-flight requests |
 | `timeout` | `Timeout` middleware | Per-request timeout |
 | `caching-headers` | `CachingHeaders`, `Modified` | Conditional GET (ETag, If-Modified-Since) |
 | `cache` | `Cache`, `CacheStore`, `CacheIssuer` | Response cache middleware |
-| `ws` / `websocket` | `WebSocketUpgrade`, `Message` | WebSocket endpoints |
+| `websocket` | `WebSocketUpgrade`, `Message` | WebSocket endpoints |
 | `sse` | `SseEvent`, `SseKeepAlive`, `sse::stream` | Server-sent events |
 | `proxy` | `Proxy`, `ProxyClient` | Reverse proxy / API gateway |
-| `oapi` | `#[endpoint]`, `OpenApi`, `Scalar`, `SwaggerUi`, `Rapidoc`, `Redoc`, `ToSchema`, `ToParameters`, `Json`, `Form`, `JsonBody`, `FormBody`, `QueryParam`, `PathParam`, `HeaderParam`, `CookieParam` | OpenAPI generation. Note: with `oapi`, prefer the typed extractors over `req.parse_*` — they auto-register schemas. |
+| `oapi` | `#[endpoint]`, `OpenApi`, `Scalar`, `SwaggerUi`, `RapiDoc`, `ReDoc`, `ToSchema`, `ToParameters`, `JsonBody`, `FormBody`, `QueryParam`, `PathParam`, `HeaderParam`, `CookieParam` | OpenAPI generation. Note: import typed extractors from `salvo::oapi::extract`; they auto-register schemas. |
 | `force-https` | `ForceHttps` middleware | HTTP→HTTPS redirect |
-| `quinn` / `http3` | HTTP/3 (QUIC) acceptor | HTTP/3 support |
+| `quinn` | HTTP/3 (QUIC) acceptor | HTTP/3 support |
 | `rustls` / `openssl` / `native-tls` | TLS acceptors | HTTPS (pick one) |
 | `acme` | ACME / Let's Encrypt acceptor | Auto TLS certificates |
 | `request-id` | `RequestId` middleware | X-Request-ID header generation |
@@ -39,7 +38,7 @@ The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salv
 | `catch-panic` | `CatchPanic` middleware | Recover from handler panics |
 | `tower-compat` | `TowerLayerCompat` adapter | Use any `tower::Layer` as Salvo middleware |
 | `anyhow` / `eyre` | `Writer` impl for `anyhow::Error` / `eyre::Report` | Returning these from handlers |
-| `test` | `TestClient`, `ResponseExt` | Integration tests |
+| `test` | `TestClient`, `ResponseExt` | Integration tests (also enabled by Salvo's default features) |
 | `craft` | `#[craft]` macro | Method handlers on structs (advanced) |
 
 ## Recommended feature sets
@@ -55,15 +54,15 @@ salvo = { version = "0.93.0", features = ["oapi", "logging", "affix-state", "cor
 salvo = { version = "0.93.0", features = ["websocket", "logging", "affix-state"] }
 
 # SPA host (frontend + API):
-salvo = { version = "0.93.0", features = ["oapi", "logging", "affix-state", "serve-static", "compression-gzip", "compression-brotli"] }
+salvo = { version = "0.93.0", features = ["oapi", "logging", "affix-state", "serve-static", "compression"] }
 
 # Reverse proxy / gateway:
-salvo = { version = "0.93.0", features = ["proxy", "logging", "rate-limiter", "compression-gzip"] }
+salvo = { version = "0.93.0", features = ["proxy", "logging", "rate-limiter", "compression"] }
 
 # HTTPS + auto cert:
 salvo = { version = "0.93.0", features = ["oapi", "logging", "rustls", "acme"] }
 
-# Test (always dev-only):
+# Test when using `default-features = false` (otherwise already enabled by default):
 [dev-dependencies]
 salvo = { version = "0.93.0", features = ["test"] }
 ```
