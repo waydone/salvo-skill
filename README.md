@@ -24,4 +24,8 @@ Zero hooks / zero MCP / zero extra permissions — pure reference text loaded on
 ## Install
 
 - **As a plugin (marketplace):** `/plugin marketplace add waydone/salvo-skill`, then `/plugin install salvo-skill@salvo-skill`.
-- **Local (symlink):** `ln -sfn /Users/coco/Documents/code/salvo/salvo-skill/skills/salvo-skill ~/.claude/skills/salvo-skill`.
+- **Local (symlink):** from the repo root, `ln -sfn "$PWD/skills/salvo-skill" ~/.claude/skills/salvo-skill`.
+
+## Updating after an edit
+
+Bump `version` in `.claude-plugin/{plugin,marketplace}.json`, `git push`, then `claude plugin marketplace update salvo-skill && claude plugin update salvo-skill@salvo-skill`, and restart. Without a version bump, `plugin update` reports "already at latest" and won't pull the new content.
