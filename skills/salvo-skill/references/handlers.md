@@ -62,7 +62,7 @@ See `data-extraction.md` for the full extractor list. These extractor types live
 | `anyhow::Error` (with `anyhow` feature) | Maps to 500 + the error string |
 | Custom `T: Writer` | Whatever the impl does |
 
-Streaming is **not** done via the return type: write the stream onto the response with `res.stream(...)` (see below), and SSE goes through `SseKeepAlive::new(stream).stream(res)` or `sse::stream(res, stream)` — `SseEvent` is the item type of the stream, not a return value (see `realtime.md`).
+Streaming is **not** done via the return type: write the stream onto the response with `res.stream(...)` (see below), and SSE goes through `SseKeepAlive::new(stream).stream(res)` or `sse::stream(res, stream)` — the stream must be a `TryStream<Ok = SseEvent>`, i.e. its items are `Result<SseEvent, E: StdError>` (wrap infallible events in `Ok::<_, Infallible>`), and `SseEvent` is never a handler return value (see `realtime.md`).
 
 Most idiomatic: return `Result<Json<T>, StatusError>` for REST APIs.
 

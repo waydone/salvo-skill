@@ -42,7 +42,7 @@ use salvo::concurrency_limiter::max_concurrency;
 let app = Router::new().hoop(max_concurrency(100)).push(/* */);
 ```
 
-Bounds in-flight requests. When no permit is available, excess requests get a 429 (or a 413 in the body-too-large branch), both with "max concurrency reached".
+Bounds in-flight requests. When no permit is available, excess requests get a **429** with "max concurrency reached".
 
 ## Compression (feature `compression`)
 
@@ -113,13 +113,13 @@ let cache = Cache::new(
     MokaStore::builder()
         .time_to_live(Duration::from_secs(60))
         .build(),
-    RequestIssuer::default(),       // cache key from method + path + query
+    RequestIssuer::default(),       // cache key = scheme + host + path + query + method (all five on by default)
 );
 
 let app = Router::new().hoop(cache).get(expensive_list);
 ```
 
-`RequestIssuer` decides the cache key (configurable: scheme/host/path/query/method); implement `CacheIssuer` for per-user keys. Don't put it in front of authenticated, user-specific responses with the default issuer — everyone would share one entry.
+`RequestIssuer` decides the cache key — by default **all five parts** (scheme/authority/path/query/method) are included, so requests arriving under a different Host header get separate cache entries; each part is toggleable via the builder. Implement `CacheIssuer` for per-user keys. Don't put it in front of authenticated, user-specific responses with the default issuer — everyone would share one entry.
 
 ## OpenTelemetry (feature `otel`)
 
