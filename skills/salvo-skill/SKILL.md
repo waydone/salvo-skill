@@ -271,7 +271,7 @@ Read these only when the task touches the topic. Each file is self-contained —
 |---|---|
 | `references/cargo-features.md` | Choosing Cargo feature flags, debugging a "function not found" error from a missing feature, or trimming binary size |
 | `references/routing.md` | Custom filters, deep nesting, host/scheme matching, regex parameters, `goal` vs `get` |
-| `references/handlers.md` | Return-type quirks, `Writer` impls, streaming responses |
+| `references/handlers.md` | Return-type quirks, `Writer` impls, streaming responses, `#[craft]` struct-method handlers |
 | `references/data-extraction.md` | File uploads, multipart, validation, custom extractors |
 | `references/middleware-state.md` | Writing custom middleware, `FlowCtrl`, DI patterns, scoped state |
 | `references/error-handling.md` | Custom error envelopes, `Catcher`, 404 pages |
@@ -279,8 +279,8 @@ Read these only when the task touches the topic. Each file is self-contained —
 | `references/openapi.md` | `#[endpoint]`, `ToSchema`, `ToParameters`, SwaggerUi / Scalar / RapiDoc / ReDoc setup |
 | `references/realtime.md` | WebSocket, SSE, broadcast patterns |
 | `references/database.md` | SQLx / SeaORM / Diesel integration via `affix_state` |
-| `references/files.md` | Static directories, embedded assets (rust-embed), file uploads |
-| `references/ops.md` | Logging/tracing, timeout, graceful shutdown, compression, proxy, HTTP/2/3 |
+| `references/files.md` | Static directories, embedded assets (rust-embed), file uploads, size limits, tus resumable uploads |
+| `references/ops.md` | Logging/tracing, timeout, graceful shutdown, compression, proxy, HTTP/2/3, OpenTelemetry, response cache, Unix socket / multi-listener |
 | `references/testing.md` | `TestClient`, integration tests, mocking middleware |
 
 If the user's question doesn't fit a single file, read 1–2 candidates and synthesize. Don't read all of them speculatively.

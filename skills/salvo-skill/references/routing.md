@@ -15,8 +15,9 @@ A request walks the tree top-down. At each node, all filters must match. The fir
 ```rust
 Router::with_path("articles/{id}")              // single segment, captured as "id"
 Router::with_path("articles/{id|\\d+}")         // regex constraint (use raw string)
-Router::with_path("files/{**rest}")             // greedy multi-segment, captured as "rest"
-Router::with_path("files/{*name}")              // single-segment but optional name
+Router::with_path("files/{**rest}")             // multi-segment wildcard, matches zero+ segments (incl. empty)
+Router::with_path("files/{*+rest}")             // multi-segment wildcard, requires at least one non-empty segment
+Router::with_path("files/{*?rest}")             // single-segment wildcard, may be empty
 Router::with_path(r"users/{id|\d+}/posts")      // mixed regex + literals
 Router::with_path("static/<**path>")            // ❌ OLD SYNTAX — gone since 0.76
 ```

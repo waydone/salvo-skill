@@ -60,8 +60,9 @@ See `data-extraction.md` for the full extractor list. These extractor types live
 | `Result<T, E>` where both `T: Writer` and `E: Writer` | Writes whichever side is present |
 | `StatusError` | Renders the framework's error page (HTML/JSON depending on `Accept`) |
 | `anyhow::Error` (with `anyhow` feature) | Maps to 500 + the error string |
-| `Stream<...>`, `SseEvent` (with `sse` feature) | Streamed response |
 | Custom `T: Writer` | Whatever the impl does |
+
+Streaming is **not** done via the return type: write the stream onto the response with `res.stream(...)` (see below), and SSE goes through `SseKeepAlive::new(stream).stream(res)` or `sse::stream(res, stream)` — `SseEvent` is the item type of the stream, not a return value (see `realtime.md`).
 
 Most idiomatic: return `Result<Json<T>, StatusError>` for REST APIs.
 
@@ -134,6 +135,50 @@ async fn h() -> ApiOk<&'static str> { ApiOk("hi") }
 ```
 
 For an error counterpart, see `error-handling.md`.
+
+## Struct-method handlers with `#[craft]` (feature `craft`)
+
+`#[handler]` can't take `self` — for handlers that read per-instance state (config, a client, a service struct), use `#[craft]` on the impl block and mark each handler method. The macro is in `salvo::prelude` when the `craft` feature is on.
+
+```rust
+use salvo::oapi::extract::*;
+use salvo::prelude::*;
+
+#[derive(Clone)]
+pub struct Opts { state: i64 }
+
+#[craft]
+impl Opts {
+    fn new(state: i64) -> Self { Self { state } }
+
+    #[craft(handler)]
+    fn add1(&self, left: QueryParam<i64>, right: QueryParam<i64>) -> String {
+        (self.state + *left + *right).to_string()    // &self receiver → type must be Clone
+    }
+
+    #[craft(handler)]
+    pub fn add2(self: std::sync::Arc<Self>, left: QueryParam<i64>, right: QueryParam<i64>) -> String {
+        (self.state + *left + *right).to_string()    // Arc<Self> receiver → no Clone needed
+    }
+
+    #[craft(handler)]
+    pub fn add3(left: QueryParam<i64>, right: QueryParam<i64>) -> String {
+        (*left + *right).to_string()                  // associated fn → no instance at all
+    }
+}
+```
+
+Registering: call the method **on an instance** (it returns a `Handler`, not the result):
+
+```rust
+let opts = std::sync::Arc::new(Opts::new(1));
+let router = Router::new()
+    .push(Router::with_path("add1").get(opts.add1()))
+    .push(Router::with_path("add2").get(opts.add2()))
+    .push(Router::with_path("add3").get(Opts::add3()));
+```
+
+Use `#[craft(endpoint)]` instead of `#[craft(handler)]` to get OpenAPI documentation (same relationship as `#[endpoint]` vs `#[handler]`). The alternative without `craft` is a free function that pulls the service from `Depot` — fine too, just more wiring.
 
 ## Common pitfalls
 

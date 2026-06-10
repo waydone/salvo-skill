@@ -67,7 +67,7 @@ Source values:
 - `"query"` — URL query string
 - `"header"` — request header
 - `"cookie"` — request cookie
-- `"body"` — request body (parsed as JSON, form, msgpack, or query depending on `Content-Type`)
+- `"body"` — request body (parsed as JSON or form depending on `Content-Type`)
 - `"request"` — the whole `Request` object (rare)
 
 Borrowed types (`&str`, `&[u8]`) work — they avoid an allocation. The lifetime threads through `Request`.
@@ -106,14 +106,17 @@ async fn h(req: &mut Request) -> Result<String, StatusError> {
 ```
 
 `req.parse_*` family:
-- `parse_json::<T>()` — JSON body
-- `parse_form::<T>()` — `application/x-www-form-urlencoded` or `multipart/form-data`
-- `parse_queries::<T>()` — URL query string (note: plural `parse_queries`, not `parse_query`)
-- `parse_body::<T>()` — auto-detect from `Content-Type`
-- `parse_msgpack::<T>()` — MessagePack body
-- `parse_cookies::<T>()` — cookies (cookie feature)
+- `parse_json::<T>()` — JSON body (async)
+- `parse_form::<T>()` — `application/x-www-form-urlencoded` or `multipart/form-data` (async)
+- `parse_body::<T>()` — auto-detect JSON vs form from `Content-Type` (async)
+- `parse_queries::<T>()` — URL query string (sync; note: plural `parse_queries`, not `parse_query`)
+- `parse_params::<T>()` — path params (sync)
+- `parse_headers::<T>()` — headers (sync)
+- `parse_cookies::<T>()` — cookies (sync, cookie feature)
 
-**`.await` gotcha:** the body parsers (`parse_json` / `parse_form` / `parse_body` / `parse_msgpack`) are `async` — `.await` them. But **`parse_queries` is synchronous** (`fn parse_queries<T>(&mut self) -> ParseResult<T>`) — call it without `.await`: `let q: MyQuery = req.parse_queries()?;`. Over-awaiting it is `E0277` (Result is not a Future).
+There is **no `parse_msgpack`** in 0.93.0 — for MessagePack, read `req.payload().await` and decode with `rmp-serde` yourself.
+
+**`.await` gotcha:** only the body parsers (`parse_json` / `parse_form` / `parse_body`) are `async` — `.await` them. The non-body family (`parse_queries` / `parse_params` / `parse_headers` / `parse_cookies`) is **synchronous** — call without `.await`: `let q: MyQuery = req.parse_queries()?;`. Over-awaiting them is `E0277` (Result is not a Future).
 
 ## Validation with `validator`
 

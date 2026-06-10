@@ -171,14 +171,17 @@ For HTTP→HTTPS redirect on a separate listener, use `salvo::force_https::Force
 ## ACME / Let's Encrypt (feature `acme`; add `quinn` if using `.quinn(...)`)
 
 ```rust
-let acceptor = TcpListener::new("0.0.0.0:443")
+let mut router = Router::new().get(hello);
+let listener = TcpListener::new("0.0.0.0:443")
     .acme()
     .cache_path("/var/lib/acme")
     .add_domain("example.com")
-    .http01_challenge(&mut router)
-    .quinn("0.0.0.0:443")  // optional HTTP/3
-    .bind()
-    .await;
+    .http01_challenge(&mut router)   // attaches the /.well-known/acme-challenge route
+    .quinn("0.0.0.0:443");           // optional HTTP/3
+// HTTP-01 validation arrives over plain HTTP — you MUST also listen on :80,
+// joined to the same server, or certificate issuance will fail:
+let acceptor = listener.join(TcpListener::new("0.0.0.0:80")).bind().await;
+Server::new(acceptor).serve(router).await;
 ```
 
-Salvo handles the ACME challenge by attaching a route to your router. Make sure port 80 (HTTP-01) or DNS (DNS-01) is reachable.
+`http01_challenge(&mut router)` wires the challenge handler into your router, but the CA connects on **port 80** — the `.join(TcpListener::new("0.0.0.0:80"))` is not optional (this mirrors the official `acme-http01` example). For DNS-01 instead, no port 80 is needed.

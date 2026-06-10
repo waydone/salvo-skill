@@ -33,7 +33,7 @@ let app = Router::new()
     .push(/* routes */);
 ```
 
-Slow handlers get a 408. Apply per-route for finer granularity (long uploads need a longer timeout than typical API calls).
+Slow handlers get a **503 Service Unavailable** by default. You can swap the error via `Timeout::error(...)` (e.g. to a 408 — but note browsers may auto-resend on 408, which is why 503 is the default). Apply per-route for finer granularity (long uploads need a longer timeout than typical API calls).
 
 ## Concurrency limit (feature `concurrency-limiter`)
 
@@ -42,7 +42,7 @@ use salvo::concurrency_limiter::max_concurrency;
 let app = Router::new().hoop(max_concurrency(100)).push(/* */);
 ```
 
-Bounds in-flight requests. Excess requests get a 429 when no permit is available.
+Bounds in-flight requests. When no permit is available, excess requests get a 429 (or a 413 in the body-too-large branch), both with "max concurrency reached".
 
 ## Compression (feature `compression`)
 
@@ -101,6 +101,44 @@ tokio::select! {
 handle.stop_graceful(Some(Duration::from_secs(30)));
 ```
 
+## Response cache (feature `cache`)
+
+Cache whole responses in memory — useful for expensive read-mostly endpoints:
+
+```rust
+use salvo::cache::{Cache, MokaStore, RequestIssuer};
+use std::time::Duration;
+
+let cache = Cache::new(
+    MokaStore::builder()
+        .time_to_live(Duration::from_secs(60))
+        .build(),
+    RequestIssuer::default(),       // cache key from method + path + query
+);
+
+let app = Router::new().hoop(cache).get(expensive_list);
+```
+
+`RequestIssuer` decides the cache key (configurable: scheme/host/path/query/method); implement `CacheIssuer` for per-user keys. Don't put it in front of authenticated, user-specific responses with the default issuer — everyone would share one entry.
+
+## OpenTelemetry (feature `otel`)
+
+Salvo ships first-party OTel middleware: `salvo::otel::Tracing` (spans per request) and `salvo::otel::Metrics` (request/error counters + duration histogram). Pair with the `opentelemetry` crate (and `opentelemetry-otlp` to export):
+
+```rust
+use opentelemetry::global;
+use salvo::otel::{Metrics, Tracing};
+
+let router = Router::new()
+    .hoop(Metrics::new())                          // argless — uses global meter "salvo"
+    .hoop(Tracing::new(global::tracer("my-app")))  // requires a Tracer argument
+    .push(/* routes */);
+```
+
+**Version-match gotcha:** your own `opentelemetry` dependency must be the **same version** salvo-otel 0.93.0 uses — `opentelemetry = "0.31"`. A newer one (e.g. 0.3x+) compiles as a *second* copy of the crate and fails with `the trait Tracer is not implemented for BoxedTracer` (two different `Tracer` traits in the graph). Check with `cargo tree -i opentelemetry` if you hit it.
+
+Setting up the OTLP exporter/provider is standard `opentelemetry` crate wiring (not Salvo-specific) — see the official `otel-jaeger` / `logging-otlp` examples and verify versions with Context7; the otel crate family moves fast.
+
 ## Reverse proxy (feature `proxy`)
 
 ```rust
@@ -152,6 +190,18 @@ let app = Service::new(router).hoop(ForceHttps::new());
 
 Or run a separate HTTP listener on :80 that 301s to the HTTPS one.
 
+## Multiple listeners / Unix sockets
+
+Combine listeners with `.join(...)` — one server, several binds (this is also how ACME HTTP-01 serves :80 + :443, see `auth-security.md`):
+
+```rust
+let acceptor = TcpListener::new("0.0.0.0:5800")
+    .join(TcpListener::new("0.0.0.0:5801"))
+    .bind().await;
+```
+
+Unix domain socket (feature `unix`, Unix-only): `salvo::conn::UnixListener::new("/tmp/app.sock").bind().await` — also joinable with TCP listeners.
+
 ## Health check pattern
 
 Skip middleware on `/healthz` so logger noise and rate limiters don't interfere:
@@ -182,4 +232,5 @@ For a production-ready Salvo service:
 6. `Compression` for client bandwidth.
 7. `RateLimiter` on public endpoints.
 8. `Catcher` for uniform 4xx/5xx error pages.
-9. `cargo build --release` before deploying — debug builds are 5–10× slower.
+9. `otel` feature (`Tracing` + `Metrics` middleware) if you export to an OTel collector.
+10. `cargo build --release` before deploying — debug builds are 5–10× slower.

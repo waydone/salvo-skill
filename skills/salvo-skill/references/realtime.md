@@ -33,7 +33,7 @@ async fn ws_handler(req: &mut Request, res: &mut Response) -> Result<(), StatusE
 let app = Router::new().push(Router::with_path("ws").goal(ws_handler));
 ```
 
-Use `.goal(ws_handler)` (not `.get(...)`) on the WebSocket route. The upgrade isn't a normal GET; `.goal` lets the handler match regardless.
+Use `.goal(ws_handler)` (not `.get(...)`) on the WebSocket route — this matches Salvo's official examples. (The handshake *is* a GET with `Upgrade` headers, so `.get(...)` can work, but `.goal` marks "this route exists only for this handler" and avoids method-filter surprises.)
 
 **Important: `Message` is an opaque struct (still true in 0.93), not an enum.** Older docs and tutorials show pattern matching like `match msg { Message::Text(t) => ... }` — that compiles on Salvo ≤0.65 only. The current API is method-based:
 

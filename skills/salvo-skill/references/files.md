@@ -23,6 +23,8 @@ Builder options:
 - `.include_dot_files(true)` — serve `.env`-like files (default: false, for safety)
 - `.fallback("index.html")` — serve this for any unmatched path (great for SPAs)
 - `.chunk_size(bytes)` — chunk size when streaming larger files (default 1 MB)
+- `.exclude(|path| path.ends_with(".secret"))` — filter fn, return `true` to refuse serving that path
+- `.compressed_variation(CompressionAlgo::Brotli, "js,css,html")` — serve pre-compressed siblings (`app.js.br`) for the listed extensions when `Accept-Encoding` allows. The algo enum here is `salvo::serve_static::dir::CompressionAlgo` (serve-static's own, **not** the one from the `compression` feature). Pairs well with a build step that pre-compresses `dist/`
 
 ## SPA hosting pattern
 
@@ -155,3 +157,7 @@ let app = Router::new()
 ```
 
 `max_size(bytes)` is a helper fn returning a `MaxSize` middleware that checks the request body's upper size hint and rejects unknown sizes. For the actual body-read/form-parser cap, use the **`SecureMaxSize` struct** — there is no `secure_max_size()` helper fn; construct it directly: `.hoop(salvo::http::request::SecureMaxSize::new(20 * 1024 * 1024))`.
+
+## Resumable uploads (feature `tus`)
+
+For large uploads that must survive connection drops (mobile clients, multi-GB files), Salvo ships a [tus.io](https://tus.io) protocol handler (`tus` feature, included in `full`) with a disk store — clients like `tus-js-client` then handle chunking/resume automatically. See the official `upload-files-tus` example and verify the current builder API with Context7 before use.

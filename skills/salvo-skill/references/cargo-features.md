@@ -30,12 +30,16 @@ The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salv
 | `oapi` | `#[endpoint]`, `OpenApi`, `Scalar`, `SwaggerUi`, `RapiDoc`, `ReDoc`, `ToSchema`, `ToParameters`, `JsonBody`, `FormBody`, `QueryParam`, `PathParam`, `HeaderParam`, `CookieParam` | OpenAPI generation. Note: import typed extractors from `salvo::oapi::extract`; they auto-register schemas. |
 | `force-https` | `ForceHttps` middleware | HTTP→HTTPS redirect |
 | `quinn` | HTTP/3 (QUIC) acceptor | HTTP/3 support |
+| `http2-cleartext` | h2c support | HTTP/2 without TLS (gRPC behind LB etc.) |
 | `rustls` / `openssl` / `native-tls` | TLS acceptors | HTTPS (pick one) |
 | `acme` | ACME / Let's Encrypt acceptor | Auto TLS certificates |
 | `request-id` | `RequestId` middleware | X-Request-ID header generation |
 | `trailing-slash` | `TrailingSlash` middleware | Strip / append trailing slash |
-| `force-host` | `ForceHost` middleware | Canonical host redirect |
 | `catch-panic` | `CatchPanic` middleware | Recover from handler panics |
+| `otel` | `salvo::otel::{Tracing, Metrics}` | OpenTelemetry traces + metrics |
+| `tus` | tus resumable-upload handler | Resumable / chunked file uploads (tus.io protocol) |
+| `unix` | `UnixListener` | Serving on a Unix domain socket |
+| `matched-path` | matched route pattern on `Request` | Route-pattern labels for metrics/logs (in default features) |
 | `tower-compat` | `TowerLayerCompat` adapter | Use any `tower::Layer` as Salvo middleware |
 | `anyhow` / `eyre` | `Writer` impl for `anyhow::Error` / `eyre::Report` | Returning these from handlers |
 | `test` | `TestClient`, `ResponseExt` | Integration tests (also enabled by Salvo's default features) |
