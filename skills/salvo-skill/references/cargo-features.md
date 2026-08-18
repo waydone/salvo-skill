@@ -1,4 +1,4 @@
-# Cargo features (0.93.0)
+# Cargo features (0.95.2)
 
 The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salvo-oapi`, etc. Every non-core capability is gated behind a feature flag. **Forgetting a feature is the most common compile error in AI-generated Salvo code.**
 
@@ -15,7 +15,8 @@ The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salv
 | `serve-static` | `StaticFile`, `StaticDir` | Serving static assets / SPA |
 | `cors` | `Cors`, `AllowOrigin`, `AllowHeaders` builders | Browser cross-origin access |
 | `csrf` | `Csrf`, `CsrfStore`, `CsrfCipher` | Form-based CSRF protection |
-| `jwt-auth` | `JwtAuth`, `JwtAuthDecoder`, `ConstDecoder`, `RsaDecoder`, etc. | JWT bearer auth |
+| `jwt-auth` | `JwtAuth`, `JwtAuthDecoder`, `ConstDecoder`, `RsaDecoder`, etc. | JWT bearer auth — defaults to jsonwebtoken's `aws_lc_rs` crypto (needs a C compiler + CMake to build AWS-LC) |
+| `jwt-auth-ring` | same symbols as `jwt-auth` | Alternative crypto: jsonwebtoken's RustCrypto provider (no CMake). Use when AWS-LC won't build — but note `full`/`rustls` still pull top-level `aws-lc-rs`, so you may also need `default-features = false` (see `references/auth-security.md`) |
 | `basic-auth` | `BasicAuth`, `BasicAuthValidator` | Basic auth |
 | `session` | `SessionHandler`, `Session`, `SessionStore` | Stateful sessions |
 | `flash` | `FlashStore`, `Flash` | One-shot redirect-survival messages |
@@ -49,26 +50,26 @@ The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salv
 
 ```toml
 # REST API + OpenAPI (most common):
-salvo = { version = "0.93.0", features = ["oapi", "logging", "affix-state", "cors", "anyhow"] }
+salvo = { version = "0.95.2", features = ["oapi", "logging", "affix-state", "cors", "anyhow"] }
 
-# REST + JWT:
-salvo = { version = "0.93.0", features = ["oapi", "logging", "affix-state", "cors", "jwt-auth", "anyhow"] }
+# REST + JWT (swap "jwt-auth" for "jwt-auth-ring" if AWS-LC fails to build):
+salvo = { version = "0.95.2", features = ["oapi", "logging", "affix-state", "cors", "jwt-auth", "anyhow"] }
 
 # WebSocket service:
-salvo = { version = "0.93.0", features = ["websocket", "logging", "affix-state"] }
+salvo = { version = "0.95.2", features = ["websocket", "logging", "affix-state"] }
 
 # SPA host (frontend + API):
-salvo = { version = "0.93.0", features = ["oapi", "logging", "affix-state", "serve-static", "compression"] }
+salvo = { version = "0.95.2", features = ["oapi", "logging", "affix-state", "serve-static", "compression"] }
 
 # Reverse proxy / gateway:
-salvo = { version = "0.93.0", features = ["proxy", "logging", "rate-limiter", "compression"] }
+salvo = { version = "0.95.2", features = ["proxy", "logging", "rate-limiter", "compression"] }
 
 # HTTPS + auto cert:
-salvo = { version = "0.93.0", features = ["oapi", "logging", "rustls", "acme"] }
+salvo = { version = "0.95.2", features = ["oapi", "logging", "rustls", "acme"] }
 
 # Test when using `default-features = false` (otherwise already enabled by default):
 [dev-dependencies]
-salvo = { version = "0.93.0", features = ["test"] }
+salvo = { version = "0.95.2", features = ["test"] }
 ```
 
 ## When you hit "cannot find struct ..."

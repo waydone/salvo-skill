@@ -77,8 +77,8 @@ Two access patterns:
 **By type** (recommended for shared state):
 
 ```rust
-depot.inject(my_value);             // T-keyed (one per type)
-let val = depot.obtain::<MyType>(); // -> Result<&MyType, _>
+depot.insert_typed(my_value);             // T-keyed (one per type)
+let val = depot.get_typed::<MyType>(); // -> Result<&MyType, _>
 ```
 
 **By string key** (per-request data):
@@ -113,7 +113,7 @@ let router = Router::new()
 
 #[handler]
 async fn handler(depot: &mut Depot) -> Result<String, StatusError> {
-    let cfg = depot.obtain::<AppConfig>()
+    let cfg = depot.get_typed::<AppConfig>()
         .map_err(|_| StatusError::internal_server_error())?;
     let _build_sha = depot.get::<&str>("build_sha");
     Ok(cfg.db_url.clone())
@@ -155,4 +155,4 @@ let app = Router::new()
     );
 ```
 
-Inside `tenant_routes`, `depot.obtain::<PgPool>()` returns whichever tenant pool was injected at the parent.
+Inside `tenant_routes`, `depot.get_typed::<PgPool>()` returns whichever tenant pool was injected at the parent.

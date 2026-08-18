@@ -56,6 +56,17 @@ let app = Router::new()
 
 For RSA / ECDSA decoders use `RsaDecoder`, `EcdsaDecoder`. For dynamic keys (e.g. JWKS rotation), implement `JwtAuthDecoder` yourself.
 
+### Crypto backend (0.94+): `jwt-auth` vs `jwt-auth-ring`
+
+Since `jsonwebtoken` went to v11, the JWT stack must pick a crypto provider, and Salvo surfaces the choice as two top-level features:
+
+- `features = ["jwt-auth"]` → jsonwebtoken's **`aws_lc_rs`** provider (the default; also what `full` pulls in). AWS-LC compiles from C via CMake, so the build host needs a C compiler **and** CMake. On a normal dev machine with build tools this just works — the whole `full` stack `cargo check`s clean.
+- `features = ["jwt-auth-ring"]` → jsonwebtoken's **`rust_crypto`** (RustCrypto) provider, plus `ring` for any rustls TLS. Reach for this when the AWS-LC build fails — typically slim containers, cross-compilation, or CI images without CMake. Symptom to recognize: a build error deep in `aws-lc-sys` / `cmake`, not in your own code. (`ring` still has a little C but needs no CMake; the JWT crypto itself is pure-Rust RustCrypto.)
+
+Same `JwtAuth` API either way — only the Cargo feature differs.
+
+⚠️ **`full` / `rustls` also enable the top-level `aws-lc-rs` for TLS.** So on a `full` build, swapping `jwt-auth` → `jwt-auth-ring` steers *JWT* to RustCrypto but does **not** remove AWS-LC from the graph. If AWS-LC itself is the thing that won't build, you need `salvo = { version = "0.95.2", default-features = false, features = ["jwt-auth-ring", "rustls", ...] }` — i.e. drop the default `aws-lc-rs` and opt back into only the ring-based features you want. And don't enable an `aws-lc-rs` feature and a `ring` feature for the *same* layer at once: jsonwebtoken 11 with both providers can't auto-select and needs an explicit `install_crypto_provider()` call to avoid a runtime panic.
+
 ## Basic auth (feature `basic-auth`)
 
 ```rust
@@ -64,7 +75,7 @@ use salvo::basic_auth::{BasicAuth, BasicAuthValidator};
 
 struct Validator;
 
-// No #[async_trait] — BasicAuthValidator uses native RPITIT (async fn in trait) in 0.93; adding it fails E0195.
+// No #[async_trait] — BasicAuthValidator uses native RPITIT (async fn in trait) in 0.95; adding it fails E0195.
 impl BasicAuthValidator for Validator {
     async fn validate(&self, username: &str, password: &str, _depot: &mut Depot) -> bool {
         username == "admin" && password == "secret"

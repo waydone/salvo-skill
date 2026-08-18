@@ -62,6 +62,19 @@ Visit:
 
 `RapiDoc` and `ReDoc` are also available with the same `.into_router(...)` pattern.
 
+### OpenAPI version (3.1 default, 3.2 opt-in)
+
+`OpenApi::new(...)` emits **OpenAPI 3.1** by default. 0.95.2 added *baseline* **3.2** support — opt in per document with `.openapi_version(...)`:
+
+```rust
+use salvo::oapi::{OpenApi, OpenApiVersion};
+let doc = OpenApi::new("My API", "1.0.0")
+    .openapi_version(OpenApiVersion::Version3_2)   // 3.1 stays the default; only switch if you actually need 3.2
+    .merge_router(&router);
+```
+
+The enum variants are `OpenApiVersion::Version3_1` (default) and `Version3_2` — verified against salvo-oapi 0.95.2 source. Scope check (also from source): "baseline" here means the `$self` field plus emitting/parsing a `3.2.x` document version — **it does not** add `QUERY` operations, custom HTTP methods, or extra Header/Parameter fields to generated docs. In particular, a `Router::query(...)` route is **not** emitted into the OpenAPI doc at any version (`merge_router` maps only GET/POST/PUT/DELETE/HEAD/OPTIONS/TRACE/PATCH; `PathItemType` has no `Query` variant). So there's rarely a reason to switch off 3.1 today — do it only if a specific consumer requires a `3.2.x` document string.
+
 ## `#[endpoint]` vs `#[handler]`
 
 Both work as Salvo handlers. `#[endpoint]` does everything `#[handler]` does, plus registers the operation with the OpenAPI doc. **In an `oapi`-enabled crate, prefer `#[endpoint]` for any HTTP-facing handler** — purely-internal handlers (custom middleware) can stay on `#[handler]`.
@@ -147,7 +160,7 @@ Then on protected endpoints add `security(["bearer" = []])`.
 2. **`merge_router` order**: it must come **after** all routes are pushed to the router. Build the API router first, then merge.
 3. **Mounting the doc router under the main router**: a footgun if your main router has a path prefix, since the doc URL gets prefixed too. Either keep the doc router at the top level, or include the prefix in the SwaggerUi/Scalar URL.
 4. **`#[endpoint]` outside an `oapi`-enabled crate**: compile error. Either enable the feature or fall back to `#[handler]`.
-5. **Missing extractor imports**: `JsonBody<T>` / `PathParam<T>` / `QueryParam<T, _>` live in `salvo::oapi::extract`, not `salvo::prelude`, and not `salvo::extract` in 0.93.0.
+5. **Missing extractor imports**: `JsonBody<T>` / `PathParam<T>` / `QueryParam<T, _>` live in `salvo::oapi::extract`, not `salvo::prelude`, and not `salvo::extract` in 0.95.2.
 6. **Long-lived borrows in DTOs**: don't use `&'a str` in `ToSchema`-derived types — `serde_json` deserialization plus schema generation needs owned types.
 
 ## When the user wants OpenAPI for an existing app

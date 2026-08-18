@@ -1,28 +1,35 @@
 ---
 name: salvo-skill
-description: "Salvo Rust web framework specialist (target 0.93.0). USE whenever ANY apply. (1) ANY mention of 'salvo'/'Salvo', even casual ('Salvo 项目报 404', 'use salvo::', 'salvo = 0.92'). (2) Cargo.toml has salvo = '…', or source imports salvo/salvo_core/salvo_extra/salvo_oapi. (3) Salvo symbols — #[handler], #[endpoint], Router::with_path, Depot, JwtAuth, WebSocketUpgrade, SwaggerUi, affix_state::inject, StatusError. (4) Fresh Rust web/API project (REST, WebSocket, SSE, reverse proxy, OpenAPI, JWT, internal dashboard, LLM streaming, real-time push) where user does NOT pick axum/actix/rocket/warp/poem — Salvo is this user's default. (5) Salvo debugging — route 404, missing JwtAuth, Cargo feature missing, Message::Text fails, angle-bracket path, missing Writer impl, empty OpenAPI. (6) Migrating TO Salvo. SKIP axum/actix/rocket/warp/poem when staying inside, hyper/tower direct, non-Rust stacks, jsonwebtoken without web. Bundles 0.93.0 API + Context7 rule for non-trivial code."
+description: "Salvo Rust web framework specialist (target 0.95.2). USE whenever ANY apply. (1) ANY mention of 'salvo'/'Salvo', even casual ('Salvo 项目报 404', 'use salvo::', 'salvo = 0.95'). (2) Cargo.toml has salvo = '…', or source imports salvo/salvo_core/salvo_extra/salvo_oapi. (3) Salvo symbols — #[handler], #[endpoint], Router::with_path, Depot, JwtAuth, WebSocketUpgrade, SwaggerUi, affix_state::inject, StatusError. (4) Fresh Rust web/API project (REST, WebSocket, SSE, reverse proxy, OpenAPI, JWT, internal dashboard, LLM streaming, real-time push) where user does NOT pick axum/actix/rocket/warp/poem — Salvo is this user's default. (5) Salvo debugging — route 404, missing JwtAuth, Cargo feature missing, Message::Text fails, angle-bracket path, missing Writer impl, empty OpenAPI, deprecated Depot::obtain/inject warnings, AWS-LC build failure on jwt-auth. (6) Migrating TO Salvo. SKIP axum/actix/rocket/warp/poem when staying inside, hyper/tower direct, non-Rust stacks, jsonwebtoken without web. Bundles 0.95.2 API + Context7 rule for non-trivial code."
 ---
 
-# Salvo Skill (target: 0.93.0)
+# Salvo Skill (target: 0.95.2)
 
 You are helping the user build Rust web services with **Salvo** — a modular, ergonomic Rust web framework. The user develops AI-first: they expect you to make sound default choices and produce production-grade code without round-tripping for clarification on every detail.
 
-This skill encodes Salvo's 0.93.0 API surface and a workflow for keeping that surface accurate as the library evolves.
+This skill encodes Salvo's 0.95.2 API surface and a workflow for keeping that surface accurate as the library evolves.
 
-### 0.93.0 vs 0.92.2 — non-breaking
+### What changed 0.93 → 0.95.2 (read this first if you know the old API)
 
-0.93.0 (2026-04-30) is a **non-breaking** release over 0.92.2. The core API this skill documents (handlers, routing, `JwtAuth`, `Writer`/`Scribe`, `Depot`, CORS, static serving, OpenAPI) is unchanged — code written for 0.92.2 compiles on 0.93.0. The only changes are four internal fixes, relevant only if you touch those areas:
+The whole `full` + `size-limiter` stack was `cargo check`-verified on 0.95.2 with Rust 1.97 while writing this skill. The core shapes (handlers, routing, `Writer`/`Scribe`, extractors, CORS, static serving, OpenAPI) are the same, so **almost all** 0.93 code still compiles — the renames below are `#[deprecated]` warnings, not errors. The one genuine hard break is the string-keyed `Depot::remove` signature (see below). The changes that actually touch code you'd write:
 
-- **Proxy**: stricter proxy path normalization (`proxy` feature).
-- **CSRF**: enforces a minimum bcrypt CSRF token size.
-- **Rate limiter**: atomic guard verification in `MokaStore`.
-- **TUS uploads**: tightened tus disk-store path validation.
+- **MSRV is now Rust 1.94** (per the 0.94.0 release notes; 0.93 was 1.92). Edition 2024 alone needs 1.85, but the salvo crates require 1.94+ to build. Bump your toolchain (`rustup update stable`) if you see an MSRV error.
+- **`Depot` type-keyed accessors were renamed** (old names kept as `#[deprecated(since = "0.94.0")]` aliases — they still compile, but write the new ones):
+  - `obtain::<T>()` → `get_typed::<T>()`, `obtain_mut` → `get_typed_mut`
+  - `inject(v)` → `insert_typed(v)`, `scrape::<T>()` → `remove_typed::<T>()`, `contains::<T>()` → `contains_typed::<T>()`
+  - **String-keyed side:** `insert("k", v)` and `get::<T>("k")` are unchanged, **but `remove` changed shape** — 0.93's `depot.remove::<T>("k")` (generic, returned the value) is now `depot.remove(key) -> Option<Box<dyn Any + Send + Sync>>` (downcast the box yourself); this is the one edit that won't just warn but fail to compile. `Depot::delete(key)` is also deprecated → use `remove(key).is_some()`.
+  - Note `affix_state::inject(...)` and the `AffixList::inject(...)` builder chain are a different, **un-deprecated** API — leave those as-is.
+- **JWT now picks a crypto backend.** Because `jsonwebtoken` went 10 → 11, `features = ["jwt-auth"]` pulls the **`aws-lc-rs`** backend (needs a C compiler + CMake to build AWS-LC). If that build fails in a container or minimal CI, use **`features = ["jwt-auth-ring"]`** instead — it selects jsonwebtoken's RustCrypto provider (plus `ring` for any rustls TLS), which builds without CMake/AWS-LC. ⚠️ Caveat: `full` and `rustls` *also* enable the top-level `aws-lc-rs` for TLS, so if AWS-LC itself is what won't build you may additionally need `default-features = false`. See `references/auth-security.md`.
+- **Shutdown/`Server` renames:** `Server::stop_forcible()` / `ServerHandle::stop_forcible()` → `stop_forceful()` (deprecated aliases remain). New: `Server::max_connections(n)` caps concurrent connections; `Server::fuse_config(...)` / `disable_fuse()` tune the default handshake/header-timeout connection fuse.
+- **`Response::stuff(status, value)` → `render_with_status(status, value)`** (deprecated alias remains). Also: `Json<T>` now **replaces** any already-buffered body bytes instead of appending (concatenated JSON is invalid); text scribes still append. For NDJSON, serialize each record and call `write_body` yourself.
+- **Also renamed (deprecated aliases, will warn):** `SchemeFilter`/`HostFilter`/`PortFilter::lack(...)` → `fallback(...)`; `StatusError::request_header_fields_toolarge` → `..._too_large`, `unavailable_for_legalreasons` → `..._legal_reasons`; oapi `Parameter::parameter_in` → `location`.
+- **New capabilities you can reach for:** first-class **`Router::query(h)`** for the HTTP `QUERY` method (a body-carrying safe read); opt-in **OpenAPI 3.2** via `OpenApi::openapi_version(OpenApiVersion::Version3_2)` — default stays 3.1, and 3.2 currently just adds the `$self` field + 3.2 document (de)serialization (QUERY routes are **not** yet emitted into the generated doc); `ToSchema` impls for `OsString` / `PathBuf` (schema generation — these are not extractors, so don't write `PathParam<PathBuf>`).
 
-If a future release introduces breaking changes, re-verify with Context7 and bump this section. Latest stable as of this skill: **0.93.0**.
+If a future release changes this surface again, re-verify with Context7 and bump this section. Latest stable as of this skill: **0.95.2** (2026-08-06).
 
 ## Hard rule: verify with Context7 before non-trivial code
 
-Salvo's API has changed meaningfully across recent minor versions (path syntax, OpenAPI macros, middleware crate splits). Your training data is older than 0.93.0.
+Salvo's API has changed meaningfully across recent minor versions (path syntax, OpenAPI macros, middleware crate splits, the 0.94 `Depot`/JWT changes above). Your training data is older than 0.95.2.
 
 **Before writing any non-trivial Salvo code, query Context7.** Non-trivial means anything beyond `fn main` + `Router::new().get(hello)`.
 
@@ -31,20 +38,20 @@ Use this exact pattern:
 ```
 Tool: mcp__plugin_context7_context7__query-docs
 libraryId: /websites/rs_salvo
-query: <a specific question, e.g. "Salvo 0.93 JwtAuth middleware constructor and decoder configuration">
+query: <a specific question, e.g. "Salvo 0.95 JwtAuth middleware constructor and decoder configuration">
 ```
 
 Fallback library IDs if the first returns nothing useful:
 - `/salvo-rs/salvo` — GitHub source (smaller corpus, sometimes fresher)
 - `/websites/salvo_rs_zh-hans` — Chinese-language docs (use if user writes in Chinese and a translated example would help)
 
-Skip Context7 only when the user is just asking conceptual questions ("what is Salvo?") or when the snippet you need is already verbatim in `references/` and you're sure it matches 0.93.0.
+Skip Context7 only when the user is just asking conceptual questions ("what is Salvo?") or when the snippet you need is already verbatim in `references/` and you're sure it matches 0.95.2.
 
 If Context7 errors out, tell the user and fall back to your knowledge — but flag the API surface as unverified and recommend running `cargo check` before trusting it.
 
 ## Project skeleton — paste-ready
 
-This is the minimum that compiles on 0.93.0. Use it as the starting point for any new app.
+This is the minimum that compiles on 0.95.2. Use it as the starting point for any new app.
 
 `Cargo.toml`:
 
@@ -52,10 +59,10 @@ This is the minimum that compiles on 0.93.0. Use it as the starting point for an
 [package]
 name = "myapp"
 version = "0.1.0"
-edition = "2024"   # ⚠️ for NEW projects use 2024 (current, Rust 1.85+). Do NOT reflexively write "2021" — that's a stale training-data default. For an EXISTING project, match whatever its Cargo.toml already declares.
+edition = "2024"   # ⚠️ for NEW projects use 2024. Do NOT reflexively write "2021" — that's a stale training-data default. For an EXISTING project, match whatever its Cargo.toml already declares. Salvo 0.95.2's MSRV is Rust 1.94 (edition 2024 alone only needs 1.85) — `rustup update stable` if you hit an MSRV error.
 
 [dependencies]
-salvo = { version = "0.93.0", features = ["full"] } # add "size-limiter" explicitly for upload/body caps
+salvo = { version = "0.95.2", features = ["full"] } # add "size-limiter" explicitly for upload/body caps
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"
@@ -153,7 +160,7 @@ let router = Router::new()
     );
 ```
 
-Method shortcuts on `Router`: `.get(h)`, `.post(h)`, `.put(h)`, `.patch(h)`, `.delete(h)`, `.head(h)`, `.options(h)`. Use `.goal(h)` when **only this handler** should match (e.g. WebSocket upgrade routes — see `references/realtime.md`).
+Method shortcuts on `Router`: `.get(h)`, `.post(h)`, `.put(h)`, `.patch(h)`, `.delete(h)`, `.head(h)`, `.options(h)`, and `.query(h)` (0.95.x, for the HTTP `QUERY` method). Use `.goal(h)` when **only this handler** should match (e.g. WebSocket upgrade routes — see `references/realtime.md`).
 
 For nested routers, custom filters, host/scheme matching, and the `and()` / `or()` composition rules, see `references/routing.md`.
 
@@ -220,12 +227,12 @@ Reading injected state in a handler:
 ```rust
 #[handler]
 async fn hello(depot: &mut Depot) -> Result<String, StatusError> {
-    let pool = depot.obtain::<PgPool>().map_err(|_| StatusError::internal_server_error())?;
+    let pool = depot.get_typed::<PgPool>().map_err(|_| StatusError::internal_server_error())?;
     /* ... */
 }
 ```
 
-`depot.obtain::<T>()` looks up by **type**. `depot.get::<&str>("key")` and `depot.insert("key", val)` use string keys — handy for per-request data.
+`depot.get_typed::<T>()` looks up by **type** (this is the 0.94 name; the old `obtain::<T>()` still compiles but is deprecated). `depot.get::<&str>("key")` and `depot.insert("key", val)` use string keys — handy for per-request data, and unchanged.
 
 For writing custom middleware, the onion model, `FlowCtrl::skip_rest()`, conditional middleware via `hoop_when`, and DI patterns, see `references/middleware-state.md`.
 
@@ -290,15 +297,16 @@ If the user's question doesn't fit a single file, read 1–2 candidates and synt
 These come up repeatedly in AI-generated Salvo code. Catch them in your own output before submitting.
 
 1. **Old path syntax**: `with_path("articles/<id>")` — wrong since 0.76. Use `{id}`.
-2. **Forgetting Cargo features**: writing `JwtAuth::new(...)` without `features = ["jwt-auth"]` (or `"full"`) → "cannot find struct" compile error. When you reach for a non-core type, mention the feature flag inline.
+2. **Forgetting Cargo features**: writing `JwtAuth::new(...)` without `features = ["jwt-auth"]` (or `"full"`) → "cannot find struct" compile error. When you reach for a non-core type, mention the feature flag inline. (`jwt-auth` defaults to the `aws-lc-rs` crypto backend, which needs a C toolchain; use `jwt-auth-ring` if that build fails.)
 3. **Returning raw `anyhow::Error`** without enabling the `anyhow` feature → no `Writer` impl, won't compile.
 4. **Mixing `axum`/`actix` idioms**: Salvo handlers don't use tuple extractors or the `State<T>` wrapper. State comes from `Depot`, not function parameters of type `State<...>`.
 5. **Overusing `Router::new().path(...)`**: it is valid, but `Router::with_path("...")` is clearer for a new route node and matches Salvo's docs/examples. Use `.path(...)` mainly when adding a path filter to an already-built router chain.
 6. **Forgetting `.bind().await`** on `TcpListener::new(addr)` — without it, the listener isn't actually bound; you'll get a confusing future-not-Send error.
 7. **Using `goal()` when you mean `get()`**: `goal()` matches **regardless of method or sub-path** — handy for `Router::with_path("ws").goal(connect)` (WebSocket upgrade), but a footgun for plain GET endpoints. If unsure, use `.get()`.
 8. **Hand-rolling JSON error responses** when `StatusError` does it. Prefer `StatusError` unless the user explicitly wants a custom error envelope.
-9. **Pattern-matching `salvo::websocket::Message`**: `match msg { Message::Text(t) => ... }` is **0.65-and-older syntax**. In 0.93 `Message` is an opaque struct — use `msg.is_text()`, `msg.as_str()`, `Message::text(s)`, `Message::binary(v)`. Lots of stale tutorials online still use the enum; ignore them.
-10. **Splitting the WebSocket with `futures_util::StreamExt::split`**: works in some versions but the canonical 0.93 path is `ws.recv()` / `ws.send(...)` directly inside the upgrade closure. Reach for `split` only when you genuinely need to drive sender and receiver from separate tasks — usually `tokio::select!` over `recv()` + a `broadcast::Receiver` is simpler.
+9. **Pattern-matching `salvo::websocket::Message`**: `match msg { Message::Text(t) => ... }` is **0.65-and-older syntax**. In 0.95 `Message` is an opaque struct — use `msg.is_text()`, `msg.as_str()`, `Message::text(s)`, `Message::binary(v)`. Lots of stale tutorials online still use the enum; ignore them.
+10. **Splitting the WebSocket with `futures_util::StreamExt::split`**: works in some versions but the canonical 0.95 path is `ws.recv()` / `ws.send(...)` directly inside the upgrade closure. Reach for `split` only when you genuinely need to drive sender and receiver from separate tasks — usually `tokio::select!` over `recv()` + a `broadcast::Receiver` is simpler.
+11. **Deprecated `Depot` accessors**: the *old* type-keyed names `depot.obtain::<T>()` / `depot.inject(v)` / `depot.scrape::<T>()` / `depot.contains::<T>()` still compile but warn since 0.94. Write the new ones — `get_typed` / `insert_typed` / `remove_typed` / `contains_typed`. (Don't "fix" `affix_state::inject(...)` — that's a separate, current, un-deprecated API.)
 
 ## Output expectations
 

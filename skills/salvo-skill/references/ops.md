@@ -59,7 +59,7 @@ let comp = Compression::new()
 let app = Router::new().hoop(comp).get(home);
 ```
 
-Salvo 0.93 exposes one top-level `compression` feature; enable only if you actually serve compressible responses — compile time matters.
+Salvo 0.95 exposes one top-level `compression` feature; enable only if you actually serve compressible responses — compile time matters.
 
 `min_length` is critical: compressing a 50-byte response loses bytes, doesn't gain them.
 
@@ -88,7 +88,9 @@ async fn main() {
 
 `stop_graceful(Some(timeout))` — wait for in-flight requests, force-close after `timeout`.
 `stop_graceful(None)` — wait indefinitely.
-`stop_forcible()` — drop everything immediately (no graceful behavior). (Method is `stop_forcible`, not `stop_force`.)
+`stop_forceful()` — drop everything immediately (no graceful behavior). Renamed in 0.94 from `stop_forcible`, which still compiles as a deprecated alias. Exists on both `Server` and `ServerHandle`.
+
+To cap concurrent connections (backpressure under load), build the server with `Server::new(acceptor).max_connections(n)` — new in 0.94; excess connections wait for a slot.
 
 For Kubernetes / systemd, also handle `SIGTERM`:
 
@@ -135,7 +137,7 @@ let router = Router::new()
     .push(/* routes */);
 ```
 
-**Version-match gotcha:** your own `opentelemetry` dependency must be the **same version** salvo-otel 0.93.0 uses — `opentelemetry = "0.31"`. A newer one (e.g. 0.3x+) compiles as a *second* copy of the crate and fails with `the trait Tracer is not implemented for BoxedTracer` (two different `Tracer` traits in the graph). Check with `cargo tree -i opentelemetry` if you hit it.
+**Version-match gotcha:** your own `opentelemetry` dependency must be the **same version** salvo-otel 0.95.2 uses — `opentelemetry = "0.32"`. A mismatched one compiles as a *second* copy of the crate and fails with `the trait Tracer is not implemented for BoxedTracer` (two different `Tracer` traits in the graph). Check with `cargo tree -i opentelemetry` if you hit it, and re-verify the exact minor with Context7 — the otel crate family bumps often (0.93 needed 0.31, 0.95.2 needs 0.32).
 
 Setting up the OTLP exporter/provider is standard `opentelemetry` crate wiring (not Salvo-specific) — see the official `otel-jaeger` / `logging-otlp` examples and verify versions with Context7; the otel crate family moves fast.
 

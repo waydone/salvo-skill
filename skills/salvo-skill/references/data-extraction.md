@@ -32,7 +32,7 @@ The `bool` const generic on `QueryParam` / `HeaderParam` / `CookieParam` is `REQ
 - `QueryParam<T, true>` — fail with 400 if missing
 - `QueryParam<T, false>` — yields `Option<T>`-ish via `.into_inner()`
 
-These types are in `salvo::oapi::extract` and need the `oapi` feature. They double as schema sources for OpenAPI generation. Without `oapi`, use `Request` methods or `Extractible` derive instead; `salvo::extract` does not provide these `JsonBody` / `PathParam` / `QueryParam` wrapper types in 0.93.0.
+These types are in `salvo::oapi::extract` and need the `oapi` feature. They double as schema sources for OpenAPI generation. Without `oapi`, use `Request` methods or `Extractible` derive instead; `salvo::extract` does not provide these `JsonBody` / `PathParam` / `QueryParam` wrapper types in 0.95.2.
 
 ## 2. `Extractible` derive (mixed sources, complex shapes)
 
@@ -114,7 +114,7 @@ async fn h(req: &mut Request) -> Result<String, StatusError> {
 - `parse_headers::<T>()` — headers (sync)
 - `parse_cookies::<T>()` — cookies (sync, cookie feature)
 
-There is **no `parse_msgpack`** in 0.93.0 — for MessagePack, read `req.payload().await` and decode with `rmp-serde` yourself.
+There is **no `parse_msgpack`** in 0.95.2 — for MessagePack, read `req.payload().await` and decode with `rmp-serde` yourself.
 
 **`.await` gotcha:** only the body parsers (`parse_json` / `parse_form` / `parse_body`) are `async` — `.await` them. The non-body family (`parse_queries` / `parse_params` / `parse_headers` / `parse_cookies`) is **synchronous** — call without `.await`: `let q: MyQuery = req.parse_queries()?;`. Over-awaiting them is `E0277` (Result is not a Future).
 

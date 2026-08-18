@@ -49,7 +49,7 @@ For single-binary deployments, use `rust-embed`:
 ```toml
 [dependencies]
 rust-embed = "8"
-salvo = { version = "0.93.0", features = ["serve-static"] }
+salvo = { version = "0.95.2", features = ["serve-static"] }
 mime_guess = "2"
 ```
 

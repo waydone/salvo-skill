@@ -6,7 +6,7 @@ Salvo doesn't bundle an ORM. Pick one and inject the connection pool via `affix_
 
 ```toml
 [dependencies]
-salvo = { version = "0.93.0", features = ["oapi", "logging", "affix-state"] }
+salvo = { version = "0.95.2", features = ["oapi", "logging", "affix-state"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "chrono", "uuid"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }
@@ -30,7 +30,7 @@ struct NewArticle { title: String, body: String }
 
 #[endpoint(tags("articles"))]
 async fn list_articles(depot: &mut Depot) -> Result<Json<Vec<Article>>, StatusError> {
-    let pool = depot.obtain::<PgPool>()
+    let pool = depot.get_typed::<PgPool>()
         .map_err(|_| StatusError::internal_server_error())?;
     let rows: Vec<Article> = sqlx::query_as("SELECT id, title, body FROM articles ORDER BY id DESC")
         .fetch_all(pool)
@@ -47,7 +47,7 @@ async fn create_article(
     depot: &mut Depot,
     body: JsonBody<NewArticle>,
 ) -> Result<Json<Article>, StatusError> {
-    let pool = depot.obtain::<PgPool>()
+    let pool = depot.get_typed::<PgPool>()
         .map_err(|_| StatusError::internal_server_error())?;
     let NewArticle { title, body } = body.into_inner();
     let row: Article = sqlx::query_as(
@@ -82,8 +82,8 @@ async fn main() -> anyhow::Result<()> {
 ```
 
 Notes:
-- `depot.obtain::<PgPool>()` returns `&PgPool`. SQLx accepts `&PgPool` directly for queries — no clone needed.
-- For multi-database apps (multiple pools), inject newtypes: `inject(ReadPool(read_pool)).inject(WritePool(write_pool))`, then `depot.obtain::<ReadPool>()`.
+- `depot.get_typed::<PgPool>()` returns `&PgPool`. SQLx accepts `&PgPool` directly for queries — no clone needed.
+- For multi-database apps (multiple pools), inject newtypes: `inject(ReadPool(read_pool)).inject(WritePool(write_pool))`, then `depot.get_typed::<ReadPool>()`.
 - Run migrations at startup with `sqlx::migrate!("./migrations").run(&pool).await?` before binding the listener.
 
 ## SeaORM
@@ -97,7 +97,7 @@ use sea_orm::{Database, DatabaseConnection};
 
 #[handler]
 async fn handler(depot: &mut Depot) -> Result<Json<Vec<MyModel::Model>>, StatusError> {
-    let db = depot.obtain::<DatabaseConnection>()
+    let db = depot.get_typed::<DatabaseConnection>()
         .map_err(|_| StatusError::internal_server_error())?;
     let rows = MyModel::Entity::find().all(db).await
         .map_err(|_| StatusError::internal_server_error())?;

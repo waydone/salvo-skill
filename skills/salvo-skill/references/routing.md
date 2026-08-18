@@ -5,7 +5,7 @@ Salvo's router is a tree. Each node has:
 - **path filter** (optional) — a string pattern matched against the request URL
 - **method/host/scheme/header filters** (optional)
 - **middleware** (`hoop`)
-- **handler** (`get` / `post` / ... / `goal` / `handle`)
+- **handler** (`get` / `post` / ... / `query` / `goal`)
 - **children** (`push`)
 
 A request walks the tree top-down. At each node, all filters must match. The first leaf whose filters all pass is the handler that runs.
@@ -66,7 +66,9 @@ Router::with_path("links")
 | `.get(h)` / `.post(h)` / etc | The handler runs **only if** the method matches AND no further sub-path. Most cases. |
 | `.goal(h)` | Matches **anything** at this node — any method, any sub-path. Use for catch-alls and WebSocket upgrade paths (`Router::with_path("ws").goal(connect)`). |
 
-There is no `Router::handle(...)` in 0.93.0. `.goal` is a footgun if used by accident — it'll swallow paths you didn't expect. When in doubt, use `.get` / `.post` / etc.
+There is no `Router::handle(...)` in 0.95.2. `.goal` is a footgun if used by accident — it'll swallow paths you didn't expect. When in doubt, use `.get` / `.post` / etc.
+
+0.95.x added a first-class shortcut for the HTTP **`QUERY`** method (a safe, body-carrying read used by some search APIs): `Router::with_path("search").query(search_handler)` (and the matching `filters::query()`). Use it directly — you don't need the `filter_fn` custom-method workaround for QUERY. Caveat: a `QUERY` route is **not** emitted into a generated OpenAPI doc at any version — `merge_router` only maps the eight standard methods, so if you also expose OpenAPI, document that endpoint some other way (see `references/openapi.md`).
 
 ## Nesting (`push`)
 
