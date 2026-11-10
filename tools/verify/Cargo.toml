@@ -1,0 +1,24 @@
+[package]
+name = "salvo-skill-verify"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+salvo = { version = "=1.1.1", features = ["full"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "signal", "fs", "io-util"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+opentelemetry = "0.33"
+futures-util = "0.3"
+jsonwebtoken = "11"
+chrono = "0.4"
+bytes = "1"
+tokio-util = { version = "0.7", features = ["io"] }
+validator = { version = "0.18", features = ["derive"] }
+rust-embed = "8"
+mime_guess = "2"
+tokio-stream = "0.1"

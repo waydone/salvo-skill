@@ -1,0 +1,29 @@
+{
+  "preamble": ["use salvo::prelude::*;"],
+  "skip_if_contains": ["sqlx", "sea_orm"],
+  "skip_if_starts_with": [".map_err(", "&mut Request"],
+  "merge_into_previous_if_contains": ["Opts::add3()"],
+  "literal_subst": {
+    "/* sqlx::PgPool::connect(...).await? */": "PgPool"
+  },
+  "value_placeholders": {
+    "router": "ph_router()",
+    "pool": "PgPool",
+    "db_pool": "PgPool",
+    "tenant_a_pool": "PgPool",
+    "tenant_b_pool": "PgPool",
+    "global_config": "Config::default()",
+    "jwt_auth": "Noop",
+    "rate_limiter": "Noop",
+    "handle": "ph_handle().await",
+    "my_stream": "ph_stream()",
+    "pdf_bytes": "Vec::<u8>::new()",
+    "my_value": "MyType::default()",
+    "service": "Service::new(Router::new())",
+    "token": "String::new()"
+  },
+  "blocks_rs_prelude": [
+    "// testing.md continuation tests call `super::router()` (the user's app module).\n",
+    "pub use crate::common::router;\n"
+  ]
+}
