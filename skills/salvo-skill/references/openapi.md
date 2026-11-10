@@ -6,7 +6,7 @@ The `salvo-oapi` crate, exposed via the `oapi` feature, generates OpenAPI 3.1 do
 
 ```rust
 use salvo::prelude::*;
-use salvo::oapi::extract::{JsonBody, PathParam};
+use salvo::oapi::extract::{JsonBody, PathParam}; // same types as salvo::extract::{...} (core since 0.96)
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -64,16 +64,22 @@ Visit:
 
 ### OpenAPI version (3.1 default, 3.2 opt-in)
 
-`OpenApi::new(...)` emits **OpenAPI 3.1** by default. 0.95.2 added *baseline* **3.2** support — opt in per document with `.openapi_version(...)`:
+`OpenApi::new(...)` still emits **OpenAPI 3.1** by default. **3.2** is opt-in per document with `.openapi_version(...)`:
 
 ```rust
 use salvo::oapi::{OpenApi, OpenApiVersion};
 let doc = OpenApi::new("My API", "1.0.0")
-    .openapi_version(OpenApiVersion::Version3_2)   // 3.1 stays the default; only switch if you actually need 3.2
+    .openapi_version(OpenApiVersion::Version3_2)   // 3.1 stays the default
     .merge_router(&router);
 ```
 
-The enum variants are `OpenApiVersion::Version3_1` (default) and `Version3_2` — verified against salvo-oapi 0.95.2 source. Scope check (also from source): "baseline" here means the `$self` field plus emitting/parsing a `3.2.x` document version — **it does not** add `QUERY` operations, custom HTTP methods, or extra Header/Parameter fields to generated docs. In particular, a `Router::query(...)` route is **not** emitted into the OpenAPI doc at any version (`merge_router` maps only GET/POST/PUT/DELETE/HEAD/OPTIONS/TRACE/PATCH; `PathItemType` has no `Query` variant). So there's rarely a reason to switch off 3.1 today — do it only if a specific consumer requires a `3.2.x` document string.
+The enum variants are `OpenApiVersion::Version3_1` (default) and `Version3_2`. What 3.2 buys you **since 1.0** (verified in salvo-oapi 1.1.1 source, `openapi.rs` route discovery):
+
+- **`Router::query(...)` routes are emitted** as `query` operations (`PathItemType::Query`), and routes on **custom HTTP methods** go into `additionalOperations`. In a document that declares **3.1** those routes are **skipped** — `merge_router` logs a `tracing::warn!` ("HTTP method has no OpenAPI 3.1 representation… call `OpenApi::openapi_version` with `OpenApiVersion::Version3_2`"). So if a `QUERY` endpoint is missing from your doc, that warning is why.
+- The 3.2 object model: Tag `summary`/`parent`/`kind`, Server `name`, Parameter `in: querystring` (`ParameterIn::QueryString`) and `style: cookie`, Media Type `itemSchema`/`prefixEncoding`/`itemEncoding`, Response `summary`, Components `mediaTypes`, the `deviceAuthorization` OAuth flow, `$self`.
+- UI caveat (from Salvo's 1.0 notes): of the bundled UIs only **Swagger UI** renders `query` operations; Scalar / RapiDoc / ReDoc load a 3.2 document but silently omit them.
+
+Switch to 3.2 when you actually have `QUERY`/custom-method routes to document or a consumer requires a `3.2.x` document; otherwise 3.1 is the safer default for tooling.
 
 ## `#[endpoint]` vs `#[handler]`
 
@@ -160,8 +166,10 @@ Then on protected endpoints add `security(["bearer" = []])`.
 2. **`merge_router` order**: it must come **after** all routes are pushed to the router. Build the API router first, then merge.
 3. **Mounting the doc router under the main router**: a footgun if your main router has a path prefix, since the doc URL gets prefixed too. Either keep the doc router at the top level, or include the prefix in the SwaggerUi/Scalar URL.
 4. **`#[endpoint]` outside an `oapi`-enabled crate**: compile error. Either enable the feature or fall back to `#[handler]`.
-5. **Missing extractor imports**: `JsonBody<T>` / `PathParam<T>` / `QueryParam<T, _>` live in `salvo::oapi::extract`, not `salvo::prelude`, and not `salvo::extract` in 0.95.2.
-6. **Long-lived borrows in DTOs**: don't use `&'a str` in `ToSchema`-derived types — `serde_json` deserialization plus schema generation needs owned types.
+5. **Missing extractor imports**: `JsonBody<T>` / `PathParam<T>` / `QueryParam<T, _>` are **not** in `salvo::prelude`. Import them from `salvo::extract` (core, since 0.96) or `salvo::oapi::extract` (re-export of the same types) — both register schemas under `#[endpoint]`.
+6. **Building `Parameters` by hand (1.1 break)**: `Parameters.0` is now `Vec<RefOr<Parameter>>` so lists can hold `$ref`s. `Parameters(vec)` with a `Vec<Parameter>` no longer compiles — write `Parameters::from(vec)`; when reading the list, match `RefOr` or use `.iter_inline()`. Inline builders (`.parameter(...)`) still take a plain `Parameter`. Similarly `Header::schema` is now `Option<RefOr<Schema>>` (1.0), and 1.0 added enum variants (`PathItemType::Query`, `ParameterIn::QueryString`, `ParameterStyle::Cookie`, `Flow::DeviceAuthorization`) — exhaustive `match`es over these need a new arm.
+7. **`QueryString` in `ToParameters` (1.1)**: deriving `ToParameters` with a `QueryString` location is now rejected (it produced an invalid schema). Use `Query` for named values; build a whole-query `content` parameter manually if you really need `in: querystring`.
+8. **Long-lived borrows in DTOs**: don't use `&'a str` in `ToSchema`-derived types — `serde_json` deserialization plus schema generation needs owned types.
 
 ## When the user wants OpenAPI for an existing app
 

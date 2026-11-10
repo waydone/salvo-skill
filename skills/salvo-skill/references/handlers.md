@@ -31,7 +31,7 @@ Don't add an `_req: &mut Request` just to "satisfy ordering" — that was true i
 In addition, the macro accepts **typed extractors as parameters**, mixable with the context types above:
 
 ```rust
-use salvo::oapi::extract::{JsonBody, PathParam, QueryParam}; // NOT in prelude — import explicitly
+use salvo::extract::{JsonBody, PathParam, QueryParam}; // NOT in prelude — import explicitly (core since 0.96)
 
 #[handler]
 async fn create_user(json: JsonBody<NewUser>) -> Json<User> { /* ... */ }
@@ -43,7 +43,7 @@ async fn show(depot: &mut Depot, id: PathParam<i64>) -> String { /* ... */ }
 async fn search(q: QueryParam<String, true>, page: QueryParam<u32, false>) -> Json<Vec<User>> { /* ... */ }
 ```
 
-See `data-extraction.md` for the full extractor list. These extractor types live in `salvo::oapi::extract` and require the `oapi` feature — they are **not** re-exported by `salvo::prelude`, so paste-ready code must import them. Without `oapi`, use `Request` methods or `Extractible` derive instead.
+See `data-extraction.md` for the full extractor list. Since 0.96 these types live in `salvo_core::extract` (import as `salvo::extract::{...}`) and need **no** `oapi` feature; `salvo::oapi::extract` re-exports the same types. They are **not** re-exported by `salvo::prelude`, so paste-ready code must import them.
 
 ## Return types — what implements `Writer`
 
@@ -117,9 +117,8 @@ For SSE specifically, see `realtime.md`.
 When your domain wraps responses uniformly (e.g., `ApiResponse<T> { code, msg, data }`), implement `Writer` once and stop calling `Json::new(...)` everywhere:
 
 ```rust
-use async_trait::async_trait;
 use serde::Serialize;
-use salvo::prelude::*;
+use salvo::prelude::*; // re-exports `async_trait` — no separate async-trait dependency needed
 
 pub struct ApiOk<T: Serialize>(pub T);
 
@@ -141,7 +140,7 @@ For an error counterpart, see `error-handling.md`.
 `#[handler]` can't take `self` — for handlers that read per-instance state (config, a client, a service struct), use `#[craft]` on the impl block and mark each handler method. The macro is in `salvo::prelude` when the `craft` feature is on.
 
 ```rust
-use salvo::oapi::extract::*;
+use salvo::extract::QueryParam;
 use salvo::prelude::*;
 
 #[derive(Clone)]

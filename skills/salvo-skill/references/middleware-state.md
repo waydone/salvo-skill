@@ -48,8 +48,7 @@ If you don't call `ctrl.call_next`, the chain still continues — the macro auto
 When the middleware needs config:
 
 ```rust
-use async_trait::async_trait;
-use salvo::prelude::*;
+use salvo::prelude::*; // re-exports `async_trait` — no separate async-trait dependency needed
 
 pub struct Bearer(pub String);
 

@@ -6,10 +6,10 @@ Three styles, listed in order of preference for typical REST APIs.
 
 ```rust
 use salvo::prelude::*;
-use salvo::oapi::extract::{JsonBody, PathParam, QueryParam}; // extractors are NOT in prelude (oapi feature)
-use serde::Deserialize;
+use salvo::extract::{JsonBody, PathParam, QueryParam}; // salvo_core since 0.96 — NOT in prelude, no `oapi` needed
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)] // Serialize because `create` echoes it back as Json<NewUser>
 struct NewUser { name: String, email: String }
 
 #[handler]
@@ -32,7 +32,7 @@ The `bool` const generic on `QueryParam` / `HeaderParam` / `CookieParam` is `REQ
 - `QueryParam<T, true>` — fail with 400 if missing
 - `QueryParam<T, false>` — yields `Option<T>`-ish via `.into_inner()`
 
-These types are in `salvo::oapi::extract` and need the `oapi` feature. They double as schema sources for OpenAPI generation. Without `oapi`, use `Request` methods or `Extractible` derive instead; `salvo::extract` does not provide these `JsonBody` / `PathParam` / `QueryParam` wrapper types in 0.95.2.
+Since **0.96** these types live in **`salvo_core::extract`** — import them as `salvo::extract::{...}`; they work **without** the `oapi` feature (`CookieParam` needs the default-on `cookie` feature). The full set: `JsonBody`, `FormBody`, `FormFile`, `FormFiles`, `PathParam`, `QueryParam`, `HeaderParam`, `CookieParam`. They are still **not** in `salvo::prelude`. With `oapi` on, `salvo::oapi::extract::{...}` re-exports the very same types (so pre-0.96 imports keep compiling) and they double as schema sources for `#[endpoint]` — either path works; prefer `salvo::extract` in new code.
 
 ## 2. `Extractible` derive (mixed sources, complex shapes)
 
@@ -114,7 +114,7 @@ async fn h(req: &mut Request) -> Result<String, StatusError> {
 - `parse_headers::<T>()` — headers (sync)
 - `parse_cookies::<T>()` — cookies (sync, cookie feature)
 
-There is **no `parse_msgpack`** in 0.95.2 — for MessagePack, read `req.payload().await` and decode with `rmp-serde` yourself.
+There is **no `parse_msgpack`** (still absent in 1.1.1) — for MessagePack, read `req.payload().await` and decode with `rmp-serde` yourself.
 
 **`.await` gotcha:** only the body parsers (`parse_json` / `parse_form` / `parse_body`) are `async` — `.await` them. The non-body family (`parse_queries` / `parse_params` / `parse_headers` / `parse_cookies`) is **synchronous** — call without `.await`: `let q: MyQuery = req.parse_queries()?;`. Over-awaiting them is `E0277` (Result is not a Future).
 
@@ -129,7 +129,7 @@ validator = { version = "0.18", features = ["derive"] }
 ```rust
 use validator::Validate;
 
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize, Serialize, Validate)] // Serialize: the handler returns Json<NewUser>
 struct NewUser {
     #[validate(email)]
     email: String,
@@ -165,13 +165,26 @@ async fn upload(req: &mut Request) -> Result<String, StatusError> {
 }
 ```
 
-`req.file("name")` returns `Option<&FilePart>`. For multiple files under one field name use `req.files("name")`, which returns `Option<&Vec<FilePart>>`.
+`req.file("name")` returns `Option<&FilePart>`. For multiple files under one field name use `req.files("name")`, which returns `Option<&Vec<FilePart>>`. `req.try_file("name")` returns `ParseResult<Option<&FilePart>>` when you need to tell "no such field" apart from "multipart parse failed".
 
-`FilePart` exposes:
+Or take them as **typed extractors** — the parameter name is the form field name:
+
+```rust
+use salvo::extract::{FormFile, FormFiles};
+
+#[handler]
+async fn upload(avatar: FormFile, attachments: FormFiles) -> String {
+    format!("{:?} + {} attachments", avatar.name(), attachments.len())
+}
+```
+
+`FilePart` / `FormFile` expose:
 - `.path()` — the temp file on disk
 - `.name()` — the original filename
 - `.content_type()` — the MIME type
 - `.headers()` — all part headers
 - `.size()` — byte length
 
-The temp file is cleaned up when `Request` drops, so move/copy it before the handler returns.
+Temp-file lifetime (1.1+): the file stays on disk until the **last** `FilePart` clone / owned `FormFile` / `FormFiles` is dropped — an owned `FormFile` keeps it readable even after the request ends (handy for handing it to a background task). Borrowed `&FilePart` from `req.file(...)` dies with the request, so copy/move the file before returning if you only hold the borrow.
+
+**Multipart count limits (1.1+):** parsing is capped at **128 parts and 32 files** by default; exceeding either (or the byte limit) returns **413**, not 400. Raise or lower per route with the `FormLimits` middleware — `Router::with_path("upload").hoop(FormLimits::new().max_files(200)).post(upload)` — or `req.set_form_limits(...)` inside a handler. Byte limits (`size-limiter`, the 64KB default body cap) apply independently — see `files.md`.

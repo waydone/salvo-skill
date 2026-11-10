@@ -33,9 +33,9 @@ async fn ws_handler(req: &mut Request, res: &mut Response) -> Result<(), StatusE
 let app = Router::new().push(Router::with_path("ws").goal(ws_handler));
 ```
 
-Use `.goal(ws_handler)` (not `.get(...)`) on the WebSocket route — this matches Salvo's official examples. (The handshake *is* a GET with `Upgrade` headers, so `.get(...)` can work, but `.goal` marks "this route exists only for this handler" and avoids method-filter surprises.)
+Use `.goal(ws_handler)` (not `.get(...)`) on the WebSocket route — this matches Salvo's official examples. (The handshake *is* a GET with `Upgrade` headers, so `.get(...)` can work, but `.goal` marks "this route exists only for this handler" and avoids method-filter surprises.) Since 1.1 `WebSocketUpgrade` itself rejects **non-GET** handshakes before switching protocols, even on a `.goal` route that matches every method, and only accepts a subprotocol/`Upgrade` the client actually offered.
 
-**Important: `Message` is an opaque struct (still true in 0.95), not an enum.** Older docs and tutorials show pattern matching like `match msg { Message::Text(t) => ... }` — that compiles on Salvo ≤0.65 only. The current API is method-based:
+**Important: `Message` is an opaque struct (still true in 1.1.1), not an enum.** Older docs and tutorials show pattern matching like `match msg { Message::Text(t) => ... }` — that compiles on Salvo ≤0.65 only. The current API is method-based:
 
 | Inspect | Construct |
 |---|---|
@@ -72,6 +72,7 @@ You can also place a JWT middleware at the parent router and the upgrade still w
 For a chat-style fan-out, share a `tokio::sync::broadcast::Sender` via `affix_state`:
 
 ```rust
+use salvo::websocket::{Message, WebSocketUpgrade};
 use tokio::sync::broadcast;
 
 #[derive(Clone)]
@@ -159,7 +160,7 @@ let app = Router::new().push(Router::with_path("events").get(stream_handler));
 - `.id(...)` — event id (`id:` field, used for reconnection)
 - `.retry(Duration)` — reconnection delay hint
 
-Wrap the stream in `SseKeepAlive` so idle connections don't get killed by proxies.
+Wrap the stream in `SseKeepAlive` so idle connections don't get killed by proxies. (1.1 fix: leading spaces in `data`, event names and IDs are now preserved through standard EventSource parsing — previously one leading space could be stripped, which mattered for token-by-token LLM streaming.)
 
 ## When to choose WebSocket vs SSE
 

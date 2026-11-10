@@ -66,9 +66,11 @@ Router::with_path("links")
 | `.get(h)` / `.post(h)` / etc | The handler runs **only if** the method matches AND no further sub-path. Most cases. |
 | `.goal(h)` | Matches **anything** at this node — any method, any sub-path. Use for catch-alls and WebSocket upgrade paths (`Router::with_path("ws").goal(connect)`). |
 
-There is no `Router::handle(...)` in 0.95.2. `.goal` is a footgun if used by accident — it'll swallow paths you didn't expect. When in doubt, use `.get` / `.post` / etc.
+There is no `Router::handle(...)` (still true in 1.1.1). `.goal` is a footgun if used by accident — it'll swallow paths you didn't expect. When in doubt, use `.get` / `.post` / etc.
 
-0.95.x added a first-class shortcut for the HTTP **`QUERY`** method (a safe, body-carrying read used by some search APIs): `Router::with_path("search").query(search_handler)` (and the matching `filters::query()`). Use it directly — you don't need the `filter_fn` custom-method workaround for QUERY. Caveat: a `QUERY` route is **not** emitted into a generated OpenAPI doc at any version — `merge_router` only maps the eight standard methods, so if you also expose OpenAPI, document that endpoint some other way (see `references/openapi.md`).
+There is a first-class shortcut for the HTTP **`QUERY`** method (a safe, body-carrying read used by some search APIs): `Router::with_path("search").query(search_handler)` (and the matching `filters::query()`). Use it directly — you don't need the `filter_fn` custom-method workaround for QUERY. OpenAPI: since 1.0 a `QUERY` route **is** emitted into the generated doc, but **only** when the document declares OpenAPI 3.2 — in the default 3.1 doc it is skipped with a `tracing::warn!` (see `references/openapi.md`).
+
+**405 / `Allow` (1.1):** when a path matches but the method doesn't, Salvo answers **405** with an `Allow` header computed from the built-in method filters on that path. If only opaque filters (e.g. a `filter_fn` method check like the `LINK` example above) guard the path, Salvo can't infer the methods and falls back to **404** — add your own 405 + `Allow` in middleware if clients need it.
 
 ## Nesting (`push`)
 
@@ -108,6 +110,8 @@ Router::new()
 Combine with `.and()` / `.or()`:
 
 ```rust
+use salvo::routing::filters::{self, Filter}; // `and` / `or` are methods of the `Filter` trait
+
 Router::new().filter(filters::path("hello").and(filters::get()));
 ```
 

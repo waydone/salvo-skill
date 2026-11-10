@@ -4,7 +4,7 @@ Salvo ships a `TestClient` that drives a `Service` in-process — no real socket
 
 ```toml
 [dev-dependencies]
-salvo = { version = "0.95.2", features = ["test"] }
+salvo = { version = "1.1.1", features = ["test"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde_json = "1"
 ```
@@ -97,9 +97,20 @@ TestClient::post("http://localhost/login")
 
 ## Multipart upload
 
+`TestClient`'s request builder has **no multipart/file helper** (no `.file(...)` — its body setters are `body` / `text` / `bytes` / `json` / `raw_json` / `form` / `raw_form`). Build the `multipart/form-data` body yourself:
+
 ```rust
+let data = std::fs::read("./tests/fixtures/avatar.png").unwrap_or_default();
+let boundary = "SALVOTESTBOUNDARY";
+let mut body = format!(
+    "--{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"avatar.png\"\r\nContent-Type: image/png\r\n\r\n"
+).into_bytes();
+body.extend_from_slice(&data);
+body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
 TestClient::post("http://localhost/upload")
-    .file("avatar", "./tests/fixtures/avatar.png")
+    .add_header("content-type", format!("multipart/form-data; boundary={boundary}"), true)
+    .body(body)
     .send(&service).await;
 ```
 

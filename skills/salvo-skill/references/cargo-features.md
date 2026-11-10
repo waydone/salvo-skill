@@ -1,8 +1,10 @@
-# Cargo features (0.95.2)
+# Cargo features (1.1.1)
 
 The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salvo-oapi`, etc. Every non-core capability is gated behind a feature flag. **Forgetting a feature is the most common compile error in AI-generated Salvo code.**
 
-`features = ["full"]` enables most optional Salvo modules and is fine for prototyping. It does **not** include `size-limiter`; add that explicitly for upload/body caps. For production, prune to what you actually use — it cuts compile time and binary size meaningfully.
+`features = ["full"]` enables most optional Salvo modules and is fine for prototyping. Since **1.1.0** it **does** include `size-limiter` (it didn't in 0.95 – 1.0.1), and since 0.96 also `rfc9457`; it still enables the `aws-lc-rs` TLS backend. For production, prune to what you actually use — it cuts compile time and binary size meaningfully (1.1 also stopped pulling unrelated `salvo_extra` deps such as WebSocket/Tower/request-id into a logging-only build).
+
+The **default** features are `cookie`, `fix-http1-request-uri`, `server`, `server-handle`, `http1`, `http2`, `test`, `aws-lc-rs`, `matched-path` — re-add the ones you need when you set `default-features = false`.
 
 ## Feature → re-exports cheatsheet
 
@@ -16,7 +18,9 @@ The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salv
 | `cors` | `Cors`, `AllowOrigin`, `AllowHeaders` builders | Browser cross-origin access |
 | `csrf` | `Csrf`, `CsrfStore`, `CsrfCipher` | Form-based CSRF protection |
 | `jwt-auth` | `JwtAuth`, `JwtAuthDecoder`, `ConstDecoder`, `RsaDecoder`, etc. | JWT bearer auth — defaults to jsonwebtoken's `aws_lc_rs` crypto (needs a C compiler + CMake to build AWS-LC) |
-| `jwt-auth-ring` | same symbols as `jwt-auth` | Alternative crypto: jsonwebtoken's RustCrypto provider (no CMake). Use when AWS-LC won't build — but note `full`/`rustls` still pull top-level `aws-lc-rs`, so you may also need `default-features = false` (see `references/auth-security.md`) |
+| `jwt-auth-ring` | same symbols as `jwt-auth` | Alternative crypto: jsonwebtoken's RustCrypto provider (no CMake). Use when AWS-LC won't build — but `aws-lc-rs` is a **default** feature (and in `full`), so you also need `default-features = false` + `ring` (see `references/auth-security.md`) |
+| `aws-lc-rs` / `ring` | rustls `CryptoProvider` backend for TLS listeners, QUIC and the proxy client | `aws-lc-rs` is on by default; pick `ring` (with `default-features = false`) when AWS-LC can't build. Since 1.0 Salvo passes the chosen provider to rustls explicitly — `salvo::conn::rustls::default_crypto_provider()` returns it |
+| `rfc9457` | `Problem`, `PlainProblem`, `NoExtensions` (in prelude) | RFC 9457 Problem Details error responses (+ OpenAPI integration); in `full` since 0.96 |
 | `basic-auth` | `BasicAuth`, `BasicAuthValidator` | Basic auth |
 | `session` | `SessionHandler`, `Session`, `SessionStore` | Stateful sessions |
 | `flash` | `FlashStore`, `Flash` | One-shot redirect-survival messages |
@@ -28,7 +32,8 @@ The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salv
 | `websocket` | `WebSocketUpgrade`, `Message` | WebSocket endpoints |
 | `sse` | `SseEvent`, `SseKeepAlive`, `sse::stream` | Server-sent events |
 | `proxy` | `Proxy`, `ProxyClient` | Reverse proxy / API gateway |
-| `oapi` | `#[endpoint]`, `OpenApi`, `Scalar`, `SwaggerUi`, `RapiDoc`, `ReDoc`, `ToSchema`, `ToParameters`, `JsonBody`, `FormBody`, `QueryParam`, `PathParam`, `HeaderParam`, `CookieParam` | OpenAPI generation. Note: import typed extractors from `salvo::oapi::extract`; they auto-register schemas. |
+| `oapi` | `#[endpoint]`, `OpenApi`, `Scalar`, `SwaggerUi`, `RapiDoc`, `ReDoc`, `ToSchema`, `ToParameters` | OpenAPI generation. The typed extractors (`JsonBody`, `FormBody`, `FormFile(s)`, `QueryParam`, `PathParam`, `HeaderParam`, `CookieParam`) are **core** since 0.96 (`salvo::extract`, no feature needed); `salvo::oapi::extract` re-exports them and `#[endpoint]` auto-registers their schemas. |
+| `size-limiter` | `max_size`, `MaxSize` | Body upper-size-hint guard (in `full` since 1.1.0) |
 | `force-https` | `ForceHttps` middleware | HTTP→HTTPS redirect |
 | `quinn` | HTTP/3 (QUIC) acceptor | HTTP/3 support |
 | `http2-cleartext` | h2c support | HTTP/2 without TLS (gRPC behind LB etc.) |
@@ -50,26 +55,26 @@ The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salv
 
 ```toml
 # REST API + OpenAPI (most common):
-salvo = { version = "0.95.2", features = ["oapi", "logging", "affix-state", "cors", "anyhow"] }
+salvo = { version = "1.1.1", features = ["oapi", "logging", "affix-state", "cors", "anyhow"] }
 
 # REST + JWT (swap "jwt-auth" for "jwt-auth-ring" if AWS-LC fails to build):
-salvo = { version = "0.95.2", features = ["oapi", "logging", "affix-state", "cors", "jwt-auth", "anyhow"] }
+salvo = { version = "1.1.1", features = ["oapi", "logging", "affix-state", "cors", "jwt-auth", "anyhow"] }
 
 # WebSocket service:
-salvo = { version = "0.95.2", features = ["websocket", "logging", "affix-state"] }
+salvo = { version = "1.1.1", features = ["websocket", "logging", "affix-state"] }
 
 # SPA host (frontend + API):
-salvo = { version = "0.95.2", features = ["oapi", "logging", "affix-state", "serve-static", "compression"] }
+salvo = { version = "1.1.1", features = ["oapi", "logging", "affix-state", "serve-static", "compression"] }
 
 # Reverse proxy / gateway:
-salvo = { version = "0.95.2", features = ["proxy", "logging", "rate-limiter", "compression"] }
+salvo = { version = "1.1.1", features = ["proxy", "logging", "rate-limiter", "compression"] }
 
 # HTTPS + auto cert:
-salvo = { version = "0.95.2", features = ["oapi", "logging", "rustls", "acme"] }
+salvo = { version = "1.1.1", features = ["oapi", "logging", "rustls", "acme"] }
 
 # Test when using `default-features = false` (otherwise already enabled by default):
 [dev-dependencies]
-salvo = { version = "0.95.2", features = ["test"] }
+salvo = { version = "1.1.1", features = ["test"] }
 ```
 
 ## When you hit "cannot find struct ..."

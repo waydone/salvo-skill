@@ -1,35 +1,54 @@
 ---
 name: salvo-skill
-description: "Salvo Rust web framework specialist (target 0.95.2). USE whenever ANY apply. (1) ANY mention of 'salvo'/'Salvo', even casual ('Salvo 项目报 404', 'use salvo::', 'salvo = 0.95'). (2) Cargo.toml has salvo = '…', or source imports salvo/salvo_core/salvo_extra/salvo_oapi. (3) Salvo symbols — #[handler], #[endpoint], Router::with_path, Depot, JwtAuth, WebSocketUpgrade, SwaggerUi, affix_state::inject, StatusError. (4) Fresh Rust web/API project (REST, WebSocket, SSE, reverse proxy, OpenAPI, JWT, internal dashboard, LLM streaming, real-time push) where user does NOT pick axum/actix/rocket/warp/poem — Salvo is this user's default. (5) Salvo debugging — route 404, missing JwtAuth, Cargo feature missing, Message::Text fails, angle-bracket path, missing Writer impl, empty OpenAPI, deprecated Depot::obtain/inject warnings, AWS-LC build failure on jwt-auth. (6) Migrating TO Salvo. SKIP axum/actix/rocket/warp/poem when staying inside, hyper/tower direct, non-Rust stacks, jsonwebtoken without web. Bundles 0.95.2 API + Context7 rule for non-trivial code."
+description: "Salvo Rust web framework specialist (target 1.1.1). USE whenever ANY apply. (1) ANY mention of 'salvo'/'Salvo', even casual ('Salvo 项目报 404', 'use salvo::', 'salvo = 1.1', 'salvo = 0.95'). (2) Cargo.toml has salvo = '…', or source imports salvo/salvo_core/salvo_extra/salvo_oapi. (3) Salvo symbols — #[handler], #[endpoint], Router::with_path, Depot, JwtAuth, WebSocketUpgrade, SwaggerUi, affix_state::inject, StatusError. (4) Fresh Rust web/API project (REST, WebSocket, SSE, reverse proxy, OpenAPI, JWT, internal dashboard, LLM streaming, real-time push) where user does NOT pick axum/actix/rocket/warp/poem — Salvo is this user's default. (5) Salvo debugging — route 404, missing JwtAuth, Cargo feature missing, Message::Text fails, angle-bracket path, missing Writer impl, empty OpenAPI / QUERY route missing from docs, deprecated Depot::obtain/inject warnings, AWS-LC build failure on jwt-auth, otel metrics vanished after upgrade, ACME stuck on first cert, multipart 413. (6) Migrating TO Salvo or upgrading 0.9x → 1.x. SKIP axum/actix/rocket/warp/poem when staying inside, hyper/tower direct, non-Rust stacks, jsonwebtoken without web. Bundles 1.1.1 API + Context7 rule for non-trivial code."
 ---
 
-# Salvo Skill (target: 0.95.2)
+# Salvo Skill (target: 1.1.1)
 
 You are helping the user build Rust web services with **Salvo** — a modular, ergonomic Rust web framework. The user develops AI-first: they expect you to make sound default choices and produce production-grade code without round-tripping for clarification on every detail.
 
-This skill encodes Salvo's 0.95.2 API surface and a workflow for keeping that surface accurate as the library evolves.
+This skill encodes Salvo's 1.1.1 API surface and a workflow for keeping that surface accurate as the library evolves.
 
-### What changed 0.93 → 0.95.2 (read this first if you know the old API)
+### What changed 0.95.2 → 1.1.1 (read this first if you know the 0.9x API)
 
-The whole `full` + `size-limiter` stack was `cargo check`-verified on 0.95.2 with Rust 1.97 while writing this skill. The core shapes (handlers, routing, `Writer`/`Scribe`, extractors, CORS, static serving, OpenAPI) are the same, so **almost all** 0.93 code still compiles — the renames below are `#[deprecated]` warnings, not errors. The one genuine hard break is the string-keyed `Depot::remove` signature (see below). The changes that actually touch code you'd write:
+Salvo hit **1.0** on 2026-09-24, but for application code it is an evolution, not a rewrite. Handlers, routing, `Writer`/`Scribe`, `Depot`, `affix_state`, WebSocket `Message`, `Proxy` and `TestClient` keep their shapes, and **every 0.94 deprecated alias still compiles** (1.0 removed none of them — checked in 1.1.1 source). The whole `full` stack plus every snippet in this skill was `cargo check`-verified on 1.1.1 with Rust 1.99. The changes that actually touch code you'd write:
 
-- **MSRV is now Rust 1.94** (per the 0.94.0 release notes; 0.93 was 1.92). Edition 2024 alone needs 1.85, but the salvo crates require 1.94+ to build. Bump your toolchain (`rustup update stable`) if you see an MSRV error.
-- **`Depot` type-keyed accessors were renamed** (old names kept as `#[deprecated(since = "0.94.0")]` aliases — they still compile, but write the new ones):
-  - `obtain::<T>()` → `get_typed::<T>()`, `obtain_mut` → `get_typed_mut`
-  - `inject(v)` → `insert_typed(v)`, `scrape::<T>()` → `remove_typed::<T>()`, `contains::<T>()` → `contains_typed::<T>()`
-  - **String-keyed side:** `insert("k", v)` and `get::<T>("k")` are unchanged, **but `remove` changed shape** — 0.93's `depot.remove::<T>("k")` (generic, returned the value) is now `depot.remove(key) -> Option<Box<dyn Any + Send + Sync>>` (downcast the box yourself); this is the one edit that won't just warn but fail to compile. `Depot::delete(key)` is also deprecated → use `remove(key).is_some()`.
-  - Note `affix_state::inject(...)` and the `AffixList::inject(...)` builder chain are a different, **un-deprecated** API — leave those as-is.
-- **JWT now picks a crypto backend.** Because `jsonwebtoken` went 10 → 11, `features = ["jwt-auth"]` pulls the **`aws-lc-rs`** backend (needs a C compiler + CMake to build AWS-LC). If that build fails in a container or minimal CI, use **`features = ["jwt-auth-ring"]`** instead — it selects jsonwebtoken's RustCrypto provider (plus `ring` for any rustls TLS), which builds without CMake/AWS-LC. ⚠️ Caveat: `full` and `rustls` *also* enable the top-level `aws-lc-rs` for TLS, so if AWS-LC itself is what won't build you may additionally need `default-features = false`. See `references/auth-security.md`.
-- **Shutdown/`Server` renames:** `Server::stop_forcible()` / `ServerHandle::stop_forcible()` → `stop_forceful()` (deprecated aliases remain). New: `Server::max_connections(n)` caps concurrent connections; `Server::fuse_config(...)` / `disable_fuse()` tune the default handshake/header-timeout connection fuse.
-- **`Response::stuff(status, value)` → `render_with_status(status, value)`** (deprecated alias remains). Also: `Json<T>` now **replaces** any already-buffered body bytes instead of appending (concatenated JSON is invalid); text scribes still append. For NDJSON, serialize each record and call `write_body` yourself.
-- **Also renamed (deprecated aliases, will warn):** `SchemeFilter`/`HostFilter`/`PortFilter::lack(...)` → `fallback(...)`; `StatusError::request_header_fields_toolarge` → `..._too_large`, `unavailable_for_legalreasons` → `..._legal_reasons`; oapi `Parameter::parameter_in` → `location`.
-- **New capabilities you can reach for:** first-class **`Router::query(h)`** for the HTTP `QUERY` method (a body-carrying safe read); opt-in **OpenAPI 3.2** via `OpenApi::openapi_version(OpenApiVersion::Version3_2)` — default stays 3.1, and 3.2 currently just adds the `$self` field + 3.2 document (de)serialization (QUERY routes are **not** yet emitted into the generated doc); `ToSchema` impls for `OsString` / `PathBuf` (schema generation — these are not extractors, so don't write `PathParam<PathBuf>`).
+- **MSRV is now Rust 1.95** (1.1.0; 0.95 was 1.94). `rustup update stable` if you see an MSRV error.
+- **Typed extractors moved into core (0.96).** `JsonBody`, `FormBody`, `FormFile`, `FormFiles`, `PathParam`, `QueryParam`, `HeaderParam`, `CookieParam` now live in `salvo_core::extract` → **`use salvo::extract::{...}`**, and they need **no `oapi` feature**. `salvo::oapi::extract::{...}` still compiles (a re-export of the same types). They are still **not** in the prelude.
+- **`full` now includes `size-limiter`** (1.1.0) and `rfc9457` (0.96). The default features are unchanged (`aws-lc-rs` is still on by default).
+- **OpenTelemetry (1.0, breaks dashboards):** needs `opentelemetry = "0.33"` (was 0.32). Metrics follow the HTTP semconv: `http.server.request.duration` in **seconds**; `salvo_request_duration_ms` / `salvo_request_count` / `salvo_error_count` are gone; `http.route` replaces `url.full`. Spans are named `{method} {route}`. Build `Metrics::new()` **after** `global::set_meter_provider(...)`, or it binds to the no-op provider. → `references/ops.md`
+- **OpenAPI:** a document that declares 3.2 now **emits `QUERY` and custom-method routes** (1.0); a 3.1 document skips them with a `warn!`. 1.1 breaks: `Parameters(vec)` → `Parameters::from(vec)` (it is now `Vec<RefOr<Parameter>>`); `Header::schema` is `Option<RefOr<Schema>>`; new enum variants (`PathItemType::Query`, `ParameterIn::QueryString`, …) break exhaustive `match`es. → `references/openapi.md`
+- **TLS (1.0):** Salvo hands rustls an explicit `CryptoProvider`, so the *"Could not automatically determine the process-level CryptoProvider"* panic is gone. Share the provider with other rustls crates via `salvo::conn::rustls::default_crypto_provider()`. 1.1 adds `req.tls_info()` (mTLS client certs, SNI, ALPN).
+- **ACME HTTP-01 (1.1):** `listener.bind().await` now waits for the first certificate, so serve the challenge router on :80 **before** binding. The old `http01_challenge(&mut router)` + `.join(TcpListener :80)` pattern hangs on first issuance. → `references/auth-security.md`
+- **Secure-by-default behavior changes:**
+  - Static SVG/XML are served as `attachment` + `nosniff` (1.0). For trusted directories, opt back in with `.disposition_type("inline")`.
+  - Multipart is capped at **128 parts / 32 files → 413** (1.1). Tune it with `salvo::http::FormLimits`.
+  - `BasicAuth` reads only `Authorization` (1.1).
+  - CSRF validates every unsafe method, including CONNECT and extension methods (1.1).
+  - `HeaderFinder::default()` now actually authenticates (1.1).
+  - WebSocket rejects non-GET handshakes (1.1).
+- **Smaller 1.1 breaks:** the JWT finders' `allowed_methods` **field** is `Option<Vec<Method>>` (the builder is unchanged); tus `Metadata` values are `Option<Vec<u8>>` (use `get_text`); sessions run on `saysion` 0.4 (1.1.1). Dropping the `serve` future now cancels in-flight connections, so drain with `ServerHandle::stop_graceful`.
+- **New capabilities:**
+  - RFC 9457 `Problem` responses plus a `ProblemGoal` catcher (`rfc9457`, in `full`) → `references/error-handling.md`.
+  - Automatic **405 + `Allow`** when the path matches but the method doesn't (1.1).
+  - Owned `FormFile` / `FormFiles` keep the upload alive after the request ends (1.1).
+  - Cookie extractors accept JSON values (1.0): `CookieParam<T>` falls back to JSON, and `Extractible` takes `source(from = "cookie", parse = "json")`.
 
-If a future release changes this surface again, re-verify with Context7 and bump this section. Latest stable as of this skill: **0.95.2** (2026-08-06).
+#### Still current from the 0.94/0.95 round (if you're coming from ≤0.93)
+
+- **`Depot` type-keyed accessors were renamed** (the old names remain as `#[deprecated(since = "0.94.0")]` aliases). `obtain::<T>()` → `get_typed::<T>()`, `obtain_mut` → `get_typed_mut`, `inject(v)` → `insert_typed(v)`, `scrape::<T>()` → `remove_typed::<T>()`, `contains::<T>()` → `contains_typed::<T>()`.
+- **String-keyed `Depot`:** `insert("k", v)` and `get::<T>("k")` are unchanged, but `remove` changed shape. 0.93's `depot.remove::<T>("k")` is now `depot.remove(key) -> Option<Box<dyn Any + Send + Sync>>`, which is a hard compile break. `delete(key)` is deprecated; use `remove(key).is_some()`. `affix_state::inject(...)` / `AffixList::inject(...)` are a different, **un-deprecated** API — leave them.
+- **JWT crypto backend:** `jwt-auth` uses jsonwebtoken's `aws_lc_rs` (needs a C compiler + CMake). `jwt-auth-ring` uses RustCrypto. `aws-lc-rs` is also a *default* `salvo` feature, so dropping AWS-LC entirely takes `default-features = false` + `ring`. → `references/auth-security.md`
+- **`Server`:** `stop_forcible()` → `stop_forceful()`. Also new: `max_connections(n)` and `fuse_config(...)` / `disable_fuse()`.
+- **`Response`:** `stuff(status, v)` → `render_with_status(status, v)`. `Json<T>` **replaces** an already-buffered body (text scribes still append).
+- **Other renames:** `Scheme/Host/PortFilter::lack` → `fallback`; `StatusError::request_header_fields_toolarge` → `…_too_large`, `unavailable_for_legalreasons` → `…_legal_reasons`; oapi `Parameter::parameter_in` → `location`.
+- **Still available:** `Router::query(h)` (HTTP `QUERY`); `ToSchema` for `OsString` / `PathBuf` (schema only — not extractors, so no `PathParam<PathBuf>`).
+
+If a future release changes this surface again, re-verify with Context7 and bump this section. Latest stable as of this skill: **1.1.1** (2026-11-06).
 
 ## Hard rule: verify with Context7 before non-trivial code
 
-Salvo's API has changed meaningfully across recent minor versions (path syntax, OpenAPI macros, middleware crate splits, the 0.94 `Depot`/JWT changes above). Your training data is older than 0.95.2.
+Salvo's API has changed meaningfully across recent versions (path syntax, OpenAPI macros, middleware crate splits, the 0.94 `Depot`/JWT changes, the 0.96 extractor move and the 1.0/1.1 changes above). Your training data is older than 1.1.1.
 
 **Before writing any non-trivial Salvo code, query Context7.** Non-trivial means anything beyond `fn main` + `Router::new().get(hello)`.
 
@@ -38,20 +57,20 @@ Use this exact pattern:
 ```
 Tool: mcp__plugin_context7_context7__query-docs
 libraryId: /websites/rs_salvo
-query: <a specific question, e.g. "Salvo 0.95 JwtAuth middleware constructor and decoder configuration">
+query: <a specific question, e.g. "Salvo 1.1 JwtAuth middleware constructor and decoder configuration">
 ```
 
 Fallback library IDs if the first returns nothing useful:
 - `/salvo-rs/salvo` — GitHub source (smaller corpus, sometimes fresher)
 - `/websites/salvo_rs_zh-hans` — Chinese-language docs (use if user writes in Chinese and a translated example would help)
 
-Skip Context7 only when the user is just asking conceptual questions ("what is Salvo?") or when the snippet you need is already verbatim in `references/` and you're sure it matches 0.95.2.
+Skip Context7 only when the user is just asking conceptual questions ("what is Salvo?") or when the snippet you need is already verbatim in `references/` and you're sure it matches 1.1.1.
 
 If Context7 errors out, tell the user and fall back to your knowledge — but flag the API surface as unverified and recommend running `cargo check` before trusting it.
 
 ## Project skeleton — paste-ready
 
-This is the minimum that compiles on 0.95.2. Use it as the starting point for any new app.
+This is the minimum that compiles on 1.1.1. Use it as the starting point for any new app.
 
 `Cargo.toml`:
 
@@ -59,17 +78,17 @@ This is the minimum that compiles on 0.95.2. Use it as the starting point for an
 [package]
 name = "myapp"
 version = "0.1.0"
-edition = "2024"   # ⚠️ for NEW projects use 2024. Do NOT reflexively write "2021" — that's a stale training-data default. For an EXISTING project, match whatever its Cargo.toml already declares. Salvo 0.95.2's MSRV is Rust 1.94 (edition 2024 alone only needs 1.85) — `rustup update stable` if you hit an MSRV error.
+edition = "2024"   # ⚠️ for NEW projects use 2024. Do NOT reflexively write "2021" — that's a stale training-data default. For an EXISTING project, match whatever its Cargo.toml already declares. Salvo 1.1's MSRV is Rust 1.95 (edition 2024 alone only needs 1.85) — `rustup update stable` if you hit an MSRV error.
 
 [dependencies]
-salvo = { version = "0.95.2", features = ["full"] } # add "size-limiter" explicitly for upload/body caps
+salvo = { version = "1.1.1", features = ["full"] } # "full" includes size-limiter since 1.1.0
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 ```
 
-`features = ["full"]` is fine for prototyping, but it does not include `size-limiter`. For production, switch to a curated list — see `references/cargo-features.md`. Common minimal sets:
+`features = ["full"]` is fine for prototyping (since 1.1.0 it also covers `size-limiter`). For production, switch to a curated list — see `references/cargo-features.md`. Common minimal sets:
 
 - REST API w/ OpenAPI: `["oapi", "logging", "affix-state"]`
 - WebSocket service: `["websocket", "logging"]`
@@ -130,7 +149,7 @@ The macro recognizes four "context" parameters by their exact types:
 | `&mut Response` | Write status, headers, body manually |
 | `&mut FlowCtrl` | Skip rest of chain (`ctrl.skip_rest()`) |
 
-In addition, the macro accepts **typed extractors** as parameters (`JsonBody<T>`, `PathParam<T>`, `QueryParam<T, REQUIRED>`, `HeaderParam<T, REQUIRED>`, `CookieParam<T, REQUIRED>`). These can appear alongside the context parameters above.
+In addition, the macro accepts **typed extractors** as parameters (`JsonBody<T>`, `FormBody<T>`, `FormFile`, `FormFiles`, `PathParam<T>`, `QueryParam<T, REQUIRED>`, `HeaderParam<T, REQUIRED>`, `CookieParam<T, REQUIRED>` — import from `salvo::extract`). These can appear alongside the context parameters above.
 
 Return types: any `T: Writer`. The framework provides impls for `&str`, `String`, `Json<T>`, `Text<...>`, `Redirect`, `()` (no body), `Result<T, E>` where both arms are `Writer`, `StatusError`, and (with the `anyhow` feature) `anyhow::Error` → 500.
 
@@ -160,7 +179,7 @@ let router = Router::new()
     );
 ```
 
-Method shortcuts on `Router`: `.get(h)`, `.post(h)`, `.put(h)`, `.patch(h)`, `.delete(h)`, `.head(h)`, `.options(h)`, and `.query(h)` (0.95.x, for the HTTP `QUERY` method). Use `.goal(h)` when **only this handler** should match (e.g. WebSocket upgrade routes — see `references/realtime.md`).
+Method shortcuts on `Router`: `.get(h)`, `.post(h)`, `.put(h)`, `.patch(h)`, `.delete(h)`, `.head(h)`, `.options(h)`, and `.query(h)` (since 0.95, for the HTTP `QUERY` method). A path that matches with the wrong method gets an automatic **405 + `Allow`** (1.1). Use `.goal(h)` when **only this handler** should match (e.g. WebSocket upgrade routes — see `references/realtime.md`).
 
 For nested routers, custom filters, host/scheme matching, and the `and()` / `or()` composition rules, see `references/routing.md`.
 
@@ -181,7 +200,7 @@ async fn h(req: &mut Request) -> Result<String, StatusError> {
 **2. Typed extractors as parameters (idiomatic, terse):**
 
 ```rust
-use salvo::oapi::extract::{JsonBody, PathParam, QueryParam}; // extractors are NOT in prelude
+use salvo::extract::{JsonBody, PathParam, QueryParam}; // core since 0.96 — NOT in prelude, no `oapi` needed
 
 #[handler]
 async fn create(json: JsonBody<NewUser>) -> Json<User> {
@@ -190,7 +209,7 @@ async fn create(json: JsonBody<NewUser>) -> Json<User> {
 }
 ```
 
-Available: `JsonBody<T>`, `FormBody<T>`, `QueryParam<T, REQUIRED>`, `PathParam<T>`, `HeaderParam<T, REQUIRED>`, `CookieParam<T, REQUIRED>` — all in `salvo::oapi::extract` (requires `oapi`), **not** in `salvo::prelude`. Without `oapi`, use `Request` methods or `Extractible` derive instead.
+Available: `JsonBody<T>`, `FormBody<T>`, `FormFile`, `FormFiles`, `QueryParam<T, REQUIRED>`, `PathParam<T>`, `HeaderParam<T, REQUIRED>`, `CookieParam<T, REQUIRED>` — all in **`salvo::extract`** (core; works without `oapi`), **not** in `salvo::prelude`. `salvo::oapi::extract::{...}` re-exports the same types, so older imports keep compiling; under `#[endpoint]` either path registers schemas.
 
 **3. `Extractible` derive (for mixed-source structs):**
 
@@ -304,9 +323,12 @@ These come up repeatedly in AI-generated Salvo code. Catch them in your own outp
 6. **Forgetting `.bind().await`** on `TcpListener::new(addr)` — without it, the listener isn't actually bound; you'll get a confusing future-not-Send error.
 7. **Using `goal()` when you mean `get()`**: `goal()` matches **regardless of method or sub-path** — handy for `Router::with_path("ws").goal(connect)` (WebSocket upgrade), but a footgun for plain GET endpoints. If unsure, use `.get()`.
 8. **Hand-rolling JSON error responses** when `StatusError` does it. Prefer `StatusError` unless the user explicitly wants a custom error envelope.
-9. **Pattern-matching `salvo::websocket::Message`**: `match msg { Message::Text(t) => ... }` is **0.65-and-older syntax**. In 0.95 `Message` is an opaque struct — use `msg.is_text()`, `msg.as_str()`, `Message::text(s)`, `Message::binary(v)`. Lots of stale tutorials online still use the enum; ignore them.
-10. **Splitting the WebSocket with `futures_util::StreamExt::split`**: works in some versions but the canonical 0.95 path is `ws.recv()` / `ws.send(...)` directly inside the upgrade closure. Reach for `split` only when you genuinely need to drive sender and receiver from separate tasks — usually `tokio::select!` over `recv()` + a `broadcast::Receiver` is simpler.
+9. **Pattern-matching `salvo::websocket::Message`**: `match msg { Message::Text(t) => ... }` is **0.65-and-older syntax**. In 0.9x and 1.x `Message` is an opaque struct — use `msg.is_text()`, `msg.as_str()`, `Message::text(s)`, `Message::binary(v)`. Lots of stale tutorials online still use the enum; ignore them.
+10. **Splitting the WebSocket with `futures_util::StreamExt::split`**: works in some versions but the canonical path (0.95 → 1.1) is `ws.recv()` / `ws.send(...)` directly inside the upgrade closure. Reach for `split` only when you genuinely need to drive sender and receiver from separate tasks — usually `tokio::select!` over `recv()` + a `broadcast::Receiver` is simpler.
 11. **Deprecated `Depot` accessors**: the *old* type-keyed names `depot.obtain::<T>()` / `depot.inject(v)` / `depot.scrape::<T>()` / `depot.contains::<T>()` still compile but warn since 0.94. Write the new ones — `get_typed` / `insert_typed` / `remove_typed` / `contains_typed`. (Don't "fix" `affix_state::inject(...)` — that's a separate, current, un-deprecated API.)
+12. **ACME HTTP-01 via `.join(TcpListener :80)`** — the pre-1.1 pattern. Since 1.1 `bind()` waits for the first certificate, so the joined :80 side never serves the challenge and issuance hangs. Spawn a separate :80 `Server` with the challenge router **before** `listener.bind().await` (see `references/auth-security.md`).
+13. **Stale otel assumptions**: old metric names (`salvo_request_duration_ms` in **ms**), `opentelemetry = "0.32"`, or `Metrics::new()` constructed before `global::set_meter_provider` (binds to no-op, records nothing). 1.x: `opentelemetry = "0.33"`, `http.server.request.duration` in **seconds** (see `references/ops.md`).
+14. **`Parameters(vec)` in hand-built OpenAPI** — 1.1 made it `Vec<RefOr<Parameter>>`; write `Parameters::from(vec)`.
 
 ## Output expectations
 

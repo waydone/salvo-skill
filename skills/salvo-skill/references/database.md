@@ -6,7 +6,7 @@ Salvo doesn't bundle an ORM. Pick one and inject the connection pool via `affix_
 
 ```toml
 [dependencies]
-salvo = { version = "0.95.2", features = ["oapi", "logging", "affix-state"] }
+salvo = { version = "1.1.1", features = ["oapi", "logging", "affix-state"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "chrono", "uuid"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }
@@ -14,7 +14,7 @@ serde = { version = "1", features = ["derive"] }
 
 ```rust
 use salvo::prelude::*;
-use salvo::oapi::extract::JsonBody;
+use salvo::extract::JsonBody; // core since 0.96 (salvo::oapi::extract re-exports it)
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use serde::{Deserialize, Serialize};
 

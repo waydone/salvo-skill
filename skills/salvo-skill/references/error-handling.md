@@ -37,8 +37,7 @@ async fn get_user(req: &mut Request) -> Result<Json<User>, StatusError> {
 When the API contract is e.g. `{ "code": <int>, "msg": "...", "data": ... }`:
 
 ```rust
-use async_trait::async_trait;
-use salvo::prelude::*;
+use salvo::prelude::*; // re-exports `async_trait` — no separate async-trait dependency needed
 
 pub enum AppError {
     BadInput(String),
@@ -74,7 +73,7 @@ async fn show(req: &mut Request) -> Result<Json<User>, AppError> {
 ## `anyhow` (with the `anyhow` Cargo feature)
 
 ```toml
-salvo = { version = "0.95.2", features = ["full", "anyhow"] }
+salvo = { version = "1.1.1", features = ["full", "anyhow"] }
 ```
 
 ```rust
@@ -147,3 +146,24 @@ Pair errors with `tracing`. A common pattern is to log at the conversion boundar
 ```
 
 Avoid leaking the original error to the client (`StatusError::internal_server_error()` without `.detail(...)` keeps the response generic). The detail goes in your logs, not the response.
+
+## RFC 9457 Problem Details (feature `rfc9457`, in `full` since 0.96)
+
+Standard `application/problem+json` errors without hand-rolling an envelope. `Problem` / `PlainProblem` / `NoExtensions` are in `salvo::prelude` when the feature is on; `Problem` is a `Scribe`, so it can be a handler's error type directly:
+
+```rust
+use salvo::prelude::*;
+use salvo::catcher::{Catcher, ProblemGoal};
+
+#[handler]
+async fn get_item() -> Result<&'static str, PlainProblem> {
+    Err(Problem::new(StatusCode::NOT_FOUND)
+        .title("Item not found")
+        .detail("No item with id 42"))
+}
+
+// Turn every framework-generated error (404 route miss, 413, StatusError, …) into problem+json too:
+let service = Service::new(router).catcher(Catcher::new(ProblemGoal::new()));
+```
+
+Builder: `.kind(uri)` (the RFC's `type` member), `.title(..)`, `.detail(..)`, `.instance(..)`; `.extension("name", json!(..))` switches to a `Problem<Map<String, Value>>` with ad-hoc members, `.with_extensions(T)` attaches a typed struct. Unlike `DefaultGoal`, `ProblemGoal` always answers `application/problem+json` (no content negotiation). With `oapi`, problem responses integrate into the generated schema — check Context7 for the `#[endpoint]` wiring.
