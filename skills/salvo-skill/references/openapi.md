@@ -109,11 +109,20 @@ Doc comments on the function are used for `summary` (first line) and `descriptio
 
 Most of these you can omit — the macro infers them from the function signature. Override only what you need.
 
-⚠️ **1.1.2 regression — `request_body(...)` inside `#[endpoint(...)]` does not compile through the `salvo` facade.** `#[endpoint(request_body(content = NewUser, description = "user payload"))]` fails with `error[E0433]: cannot find RefOr in salvo` (the macro expands to `salvo::RefOr` instead of `salvo::oapi::RefOr`; compiled and confirmed on 1.1.2, still unfixed on upstream `main` as of 2026-11-13 — re-check on the next release). It worked up to and including 1.1.1. Pick one:
+⚠️ **1.1.2 regression — `request_body(...)` inside `#[endpoint(...)]` does not compile through the `salvo` facade.** `#[endpoint(request_body(content = NewUser, description = "user payload"))]` fails with `error[E0433]: cannot find RefOr in salvo` (the macro expands to `salvo::RefOr` instead of `salvo::oapi::RefOr`; compiled and confirmed on 1.1.2, still unfixed on upstream `main` as of 2026-11-13 — re-check on the next release). It compiles when every salvo crate in `Cargo.lock` is 1.1.1; the regression is in the `salvo-oapi-macros` **1.1.2** sub-crate, so what matters is that crate's locked version, not the `salvo` version you wrote. Pick one:
 
 1. **Let the extractor declare the body (preferred, and what you'd normally write anyway):** drop the attribute and take `JsonBody<NewUser>` / `FormBody<T>` / `FormFile` as an argument — the request body and its schema are inferred. You lose only the custom `description`.
 2. **Need the attribute (custom description / content type)?** add `salvo-oapi = "=1.1.2"` as a *direct* dependency next to `salvo`. The macro then resolves through `salvo_oapi::RefOr` and the same attribute compiles (verified); the types are the same crate, so nothing else changes.
-3. Pin `salvo = "=1.1.1"` (the last release where the attribute compiles) until a fixed release.
+3. **Roll back — but pinning `salvo` alone is not enough.** The broken code lives in the `salvo-oapi-macros` 1.1.2 sub-crate, and `salvo` 1.1.1 only requires `^1.1.1` of its sub-crates, so `salvo = "=1.1.1"` with a fresh or updated lockfile still resolves `salvo-oapi-macros` 1.1.2 and fails the same way (verified). That also means **a project still on salvo 1.1.1 starts failing after a plain `cargo update`**. To really roll back, keep `salvo = "=1.1.1"` and hold the two oapi crates in `Cargo.lock`, in this order (verified to compile; the other sub-crates may stay on 1.1.2):
+
+   ```sh
+   cargo update -p salvo-oapi --precise 1.1.1
+   cargo update -p salvo-oapi-macros --precise 1.1.1
+   ```
+
+   Commit `Cargo.lock`. With `salvo = "1.1.2"` there is no rollback of the macro crate (`salvo-oapi` 1.1.2 requires `salvo-oapi-macros ^1.1.2`) — use option 1 or 2.
+
+How to recognize it: `error[E0433]: cannot find RefOr in salvo`, pointing at the whole `#[endpoint(...)]` attribute, and `salvo-oapi-macros` at 1.1.2 in `Cargo.lock` (`cargo tree -i salvo-oapi-macros`).
 
 Cargo 1.100 can keep you off day-one releases like this one: `[registry] global-min-publish-age = "7 days"` in `.cargo/config.toml` makes the resolver ignore versions younger than a week unless `Cargo.lock` already has them (verified — with a 5-day window `salvo = "1.1"` resolved to 1.1.1 while 1.1.2 was three days old).
 
