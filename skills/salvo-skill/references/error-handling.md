@@ -73,7 +73,7 @@ async fn show(req: &mut Request) -> Result<Json<User>, AppError> {
 ## `anyhow` (with the `anyhow` Cargo feature)
 
 ```toml
-salvo = { version = "1.1.1", features = ["full", "anyhow"] }
+salvo = { version = "1.1.2", features = ["full", "anyhow"] }
 ```
 
 ```rust

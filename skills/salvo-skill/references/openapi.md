@@ -73,7 +73,7 @@ let doc = OpenApi::new("My API", "1.0.0")
     .merge_router(&router);
 ```
 
-The enum variants are `OpenApiVersion::Version3_1` (default) and `Version3_2`. What 3.2 buys you **since 1.0** (verified in salvo-oapi 1.1.1 source, `openapi.rs` route discovery):
+The enum variants are `OpenApiVersion::Version3_1` (default) and `Version3_2`. What 3.2 buys you **since 1.0** (verified in salvo-oapi 1.1.2 source, `openapi.rs` route discovery):
 
 - **`Router::query(...)` routes are emitted** as `query` operations (`PathItemType::Query`), and routes on **custom HTTP methods** go into `additionalOperations`. In a document that declares **3.1** those routes are **skipped** — `merge_router` logs a `tracing::warn!` ("HTTP method has no OpenAPI 3.1 representation… call `OpenApi::openapi_version` with `OpenApiVersion::Version3_2`"). So if a `QUERY` endpoint is missing from your doc, that warning is why.
 - The 3.2 object model: Tag `summary`/`parent`/`kind`, Server `name`, Parameter `in: querystring` (`ParameterIn::QueryString`) and `style: cookie`, Media Type `itemSchema`/`prefixEncoding`/`itemEncoding`, Response `summary`, Components `mediaTypes`, the `deviceAuthorization` OAuth flow, `$self`.
@@ -96,7 +96,7 @@ Doc comments on the function are used for `summary` (first line) and `descriptio
     parameters(
         ("limit" = u32, Query, description = "page size", example = 20)
     ),
-    request_body(content = NewUser, description = "user payload"),
+    // request body: take a `JsonBody<NewUser>` argument and let the macro infer it — see the 1.1.2 warning below
     responses(
         (status_code = 200, body = User, description = "ok",
          content_type = ["application/json"], example = json!({"id":1,"name":"Ada"})),
@@ -108,6 +108,12 @@ Doc comments on the function are used for `summary` (first line) and `descriptio
 ```
 
 Most of these you can omit — the macro infers them from the function signature. Override only what you need.
+
+⚠️ **1.1.2 regression — `request_body(...)` inside `#[endpoint(...)]` does not compile through the `salvo` facade.** `#[endpoint(request_body(content = NewUser, description = "user payload"))]` fails with `error[E0433]: cannot find RefOr in salvo` (the macro expands to `salvo::RefOr` instead of `salvo::oapi::RefOr`; compiled and confirmed on 1.1.2, still unfixed on upstream `main` as of 2026-11-13 — re-check on the next release). It worked on ≤ 1.1.2. Pick one:
+
+1. **Let the extractor declare the body (preferred, and what you'd normally write anyway):** drop the attribute and take `JsonBody<NewUser>` / `FormBody<T>` / `FormFile` as an argument — the request body and its schema are inferred. You lose only the custom `description`.
+2. **Need the attribute (custom description / content type)?** add `salvo-oapi = "=1.1.2"` as a *direct* dependency next to `salvo`. The macro then resolves through `salvo_oapi::RefOr` and the same attribute compiles (verified); the types are the same crate, so nothing else changes.
+3. Pin `salvo = "=1.1.2"` until a fixed release.
 
 ## `ToSchema` for response/request types
 
@@ -169,7 +175,9 @@ Then on protected endpoints add `security(["bearer" = []])`.
 5. **Missing extractor imports**: `JsonBody<T>` / `PathParam<T>` / `QueryParam<T, _>` are **not** in `salvo::prelude`. Import them from `salvo::extract` (core, since 0.96) or `salvo::oapi::extract` (re-export of the same types) — both register schemas under `#[endpoint]`.
 6. **Building `Parameters` by hand (1.1 break)**: `Parameters.0` is now `Vec<RefOr<Parameter>>` so lists can hold `$ref`s. `Parameters(vec)` with a `Vec<Parameter>` no longer compiles — write `Parameters::from(vec)`; when reading the list, match `RefOr` or use `.iter_inline()`. Inline builders (`.parameter(...)`) still take a plain `Parameter`. Similarly `Header::schema` is now `Option<RefOr<Schema>>` (1.0), and 1.0 added enum variants (`PathItemType::Query`, `ParameterIn::QueryString`, `ParameterStyle::Cookie`, `Flow::DeviceAuthorization`) — exhaustive `match`es over these need a new arm.
 7. **`QueryString` in `ToParameters` (1.1)**: deriving `ToParameters` with a `QueryString` location is now rejected (it produced an invalid schema). Use `Query` for named values; build a whole-query `content` parameter manually if you really need `in: querystring`.
-8. **Long-lived borrows in DTOs**: don't use `&'a str` in `ToSchema`-derived types — `serde_json` deserialization plus schema generation needs owned types.
+8. **`Operation.request_body` is a `RefOr` (1.1.2 break)**: the public field is now `Option<RefOr<RequestBody>>`, so a body can point at `#/components/requestBodies/...`. The builder is source compatible — `.request_body(RequestBody::new())` or `.request_body(Ref::new("#/components/requestBodies/NewUser"))` — but a direct assignment needs `.into()` (`operation.request_body = Some(body.into())`, typical in a hand-written `EndpointArgRegister`), and readers must match `RefOr::Type(..)` / `RefOr::Ref(..)`. An explicit `$ref` body is left alone by the payload extractors. Same release: `Link` serializes the standard `operationId` / `operationRef` / `requestBody` names (the old snake_case ones are still accepted on input), and `Header::schema(..)` / `Header::content(..)` now replace each other instead of emitting both.
+9. **`request_body(...)` in `#[endpoint(...)]` on 1.1.2**: does not compile through the `salvo` facade — see the warning under "`#[endpoint]` attributes".
+10. **Long-lived borrows in DTOs**: don't use `&'a str` in `ToSchema`-derived types — `serde_json` deserialization plus schema generation needs owned types.
 
 ## When the user wants OpenAPI for an existing app
 

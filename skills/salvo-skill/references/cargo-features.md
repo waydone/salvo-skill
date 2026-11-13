@@ -1,4 +1,4 @@
-# Cargo features (1.1.1)
+# Cargo features (1.1.2)
 
 The `salvo` crate is a curated re-export over `salvo-core`, `salvo-extra`, `salvo-oapi`, etc. Every non-core capability is gated behind a feature flag. **Forgetting a feature is the most common compile error in AI-generated Salvo code.**
 
@@ -55,26 +55,26 @@ The **default** features are `cookie`, `fix-http1-request-uri`, `server`, `serve
 
 ```toml
 # REST API + OpenAPI (most common):
-salvo = { version = "1.1.1", features = ["oapi", "logging", "affix-state", "cors", "anyhow"] }
+salvo = { version = "1.1.2", features = ["oapi", "logging", "affix-state", "cors", "anyhow"] }
 
 # REST + JWT (swap "jwt-auth" for "jwt-auth-ring" if AWS-LC fails to build):
-salvo = { version = "1.1.1", features = ["oapi", "logging", "affix-state", "cors", "jwt-auth", "anyhow"] }
+salvo = { version = "1.1.2", features = ["oapi", "logging", "affix-state", "cors", "jwt-auth", "anyhow"] }
 
 # WebSocket service:
-salvo = { version = "1.1.1", features = ["websocket", "logging", "affix-state"] }
+salvo = { version = "1.1.2", features = ["websocket", "logging", "affix-state"] }
 
 # SPA host (frontend + API):
-salvo = { version = "1.1.1", features = ["oapi", "logging", "affix-state", "serve-static", "compression"] }
+salvo = { version = "1.1.2", features = ["oapi", "logging", "affix-state", "serve-static", "compression"] }
 
 # Reverse proxy / gateway:
-salvo = { version = "1.1.1", features = ["proxy", "logging", "rate-limiter", "compression"] }
+salvo = { version = "1.1.2", features = ["proxy", "logging", "rate-limiter", "compression"] }
 
 # HTTPS + auto cert:
-salvo = { version = "1.1.1", features = ["oapi", "logging", "rustls", "acme"] }
+salvo = { version = "1.1.2", features = ["oapi", "logging", "rustls", "acme"] }
 
 # Test when using `default-features = false` (otherwise already enabled by default):
 [dev-dependencies]
-salvo = { version = "1.1.1", features = ["test"] }
+salvo = { version = "1.1.2", features = ["test"] }
 ```
 
 ## When you hit "cannot find struct ..."

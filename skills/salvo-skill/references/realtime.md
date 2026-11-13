@@ -35,7 +35,7 @@ let app = Router::new().push(Router::with_path("ws").goal(ws_handler));
 
 Use `.goal(ws_handler)` (not `.get(...)`) on the WebSocket route — this matches Salvo's official examples. (The handshake *is* a GET with `Upgrade` headers, so `.get(...)` can work, but `.goal` marks "this route exists only for this handler" and avoids method-filter surprises.) Since 1.1 `WebSocketUpgrade` itself rejects **non-GET** handshakes before switching protocols, even on a `.goal` route that matches every method, and only accepts a subprotocol/`Upgrade` the client actually offered.
 
-**Important: `Message` is an opaque struct (still true in 1.1.1), not an enum.** Older docs and tutorials show pattern matching like `match msg { Message::Text(t) => ... }` — that compiles on Salvo ≤0.65 only. The current API is method-based:
+**Important: `Message` is an opaque struct (still true in 1.1.2), not an enum.** Older docs and tutorials show pattern matching like `match msg { Message::Text(t) => ... }` — that compiles on Salvo ≤0.65 only. The current API is method-based:
 
 | Inspect | Construct |
 |---|---|
@@ -44,6 +44,8 @@ Use `.goal(ws_handler)` (not `.get(...)`) on the WebSocket route — this matche
 | `msg.as_bytes() -> &[u8]` | `Message::close()` / `Message::close_with(code, reason)` |
 
 Don't try to destructure `Message` with `if let Message::Text(t)` — it won't compile.
+
+**Lifecycle (1.1.2):** the upgraded socket task is now owned by its server connection instead of being a detached `tokio::spawn`. Three consequences: it holds a `Server::max_connections` permit for as long as the socket is open; `ServerHandle::stop_graceful(..)` waits for open sockets (so give it a timeout, or close sockets yourself on a shutdown signal — otherwise an idle chat connection holds the drain until the timeout); and `stop_forceful()` or dropping the `serve` future cancels the socket task. The same applies to upgrade tunnels through `Proxy`.
 
 ## Pre-upgrade auth / config
 

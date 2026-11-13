@@ -1,4 +1,4 @@
-//! Runtime checks for behavior claims the skill makes about Salvo 1.1.1.
+//! Runtime checks for behavior claims the skill makes about Salvo 1.1.x.
 #[cfg(test)]
 mod tests {
     use salvo::extract::{FormFile, FormFiles};
@@ -123,5 +123,113 @@ mod tests {
         .unwrap();
         assert!(v31["paths"]["/search"]["query"].is_null(), "3.1 doc: {v31}");
         assert!(v32["paths"]["/search"]["query"].is_object(), "3.2 doc: {v32}");
+    }
+
+    // ---- 1.1.2 ----
+
+    #[handler]
+    async fn tail(req: &mut Request) -> String {
+        req.param::<String>("rest").unwrap_or_default()
+    }
+
+    /// routing.md: encoded path separators are rejected with 400 before routing (1.1.2).
+    #[tokio::test]
+    async fn encoded_separator_is_400() {
+        static HOOPED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        #[handler]
+        async fn count_hoop() {
+            HOOPED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        let service = Service::new(Router::new().hoop(count_hoop).push(Router::with_path("files/{**rest}").get(tail)));
+        let ok = TestClient::get("http://localhost/files/a/b").send(&service).await;
+        assert_eq!(ok.status_code, Some(StatusCode::OK));
+        assert_eq!(HOOPED.load(std::sync::atomic::Ordering::SeqCst), 1);
+        for path in ["/files/a%2Fb", "/files/a%2fb", "/files/a%5Cb"] {
+            let res = TestClient::get(format!("http://localhost{path}")).send(&service).await;
+            assert_eq!(res.status_code, Some(StatusCode::BAD_REQUEST), "{path}");
+        }
+        // routing.md: the 400 is produced before any hoop runs.
+        assert_eq!(HOOPED.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    /// auth-security.md: `CookieStore::host_prefixed()` issues a `__Host-` Secure cookie even over plain HTTP hops (1.1.2).
+    #[tokio::test]
+    async fn csrf_host_prefixed_cookie() {
+        use salvo::csrf::{BcryptCipher, CookieStore, Csrf, FormFinder};
+        let csrf = Csrf::new(BcryptCipher::new(), CookieStore::host_prefixed(), FormFinder::new("csrf_token"));
+        let service = Service::new(Router::new().hoop(csrf).get(only_get));
+        let res = TestClient::get("http://localhost/").send(&service).await;
+        let cookie = res.headers().get("set-cookie").expect("Set-Cookie").to_str().unwrap().to_owned();
+        assert!(cookie.starts_with("__Host-salvo.csrf="), "{cookie}");
+        assert!(cookie.contains("Secure") && cookie.contains("Path=/") && !cookie.contains("Domain"), "{cookie}");
+    }
+
+    /// ops.md: `max_concurrency(n).include_body(true)` exists (1.1.2) and still serves.
+    #[tokio::test]
+    async fn concurrency_include_body() {
+        use salvo::concurrency_limiter::max_concurrency;
+        let service = Service::new(Router::new().hoop(max_concurrency(1).include_body(true)).get(only_get));
+        for _ in 0..2 {
+            let mut res = TestClient::get("http://localhost/").send(&service).await;
+            assert_eq!(res.take_string().await.unwrap(), "ok");
+        }
+    }
+
+    /// openapi.md: `Operation::request_body` takes a `Ref` (1.1.2); `Link` serializes camelCase names.
+    #[test]
+    fn oapi_request_body_ref_and_link_names() {
+        use salvo::oapi::{Link, Operation, Ref, RefOr, RequestBody};
+        let op = Operation::new().request_body(Ref::new("#/components/requestBodies/NewUser"));
+        assert!(matches!(op.request_body, Some(RefOr::Ref(_))));
+        let v = serde_json::to_value(&op).unwrap();
+        assert_eq!(v["requestBody"]["$ref"], "#/components/requestBodies/NewUser");
+        let inline = Operation::new().request_body(RequestBody::new());
+        assert!(matches!(inline.request_body, Some(RefOr::Type(_))));
+        let link = serde_json::to_value(Link::default().operation_id("read")).unwrap();
+        assert_eq!(link["operationId"], "read");
+    }
+
+    static HITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    #[handler]
+    async fn counted() -> String {
+        HITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst).to_string()
+    }
+
+    /// ops.md: a request `Cache-Control: no-cache` bypasses the response cache (1.1.2).
+    #[tokio::test]
+    async fn cache_honors_request_no_cache() {
+        use salvo::cache::{Cache, MokaStore, RequestIssuer};
+        let cache = Cache::new(
+            MokaStore::builder().time_to_live(std::time::Duration::from_secs(60)).build(),
+            RequestIssuer::default(),
+        );
+        let service = Service::new(Router::new().hoop(cache).get(counted));
+        let mut a = TestClient::get("http://localhost/").send(&service).await;
+        let mut b = TestClient::get("http://localhost/").send(&service).await;
+        assert_eq!(a.take_string().await.unwrap(), b.take_string().await.unwrap(), "second hit is cached");
+        let before = HITS.load(std::sync::atomic::Ordering::SeqCst);
+        TestClient::get("http://localhost/").add_header("cache-control", "no-cache", true).send(&service).await;
+        assert_eq!(HITS.load(std::sync::atomic::Ordering::SeqCst), before + 1, "no-cache reaches the handler");
+    }
+
+    #[handler]
+    async fn big() -> String {
+        "salvo ".repeat(2000)
+    }
+
+    /// ops.md: an explicit higher-q `identity` wins the compression negotiation (1.1.2).
+    #[tokio::test]
+    async fn compression_respects_identity_preference() {
+        use salvo::compression::{Compression, CompressionLevel};
+        let comp = Compression::new().enable_gzip(CompressionLevel::Default);
+        let service = Service::new(Router::new().hoop(comp).get(big));
+        let gz = TestClient::get("http://localhost/").add_header("accept-encoding", "gzip", true).send(&service).await;
+        assert_eq!(gz.headers().get("content-encoding").map(|v| v.to_str().unwrap()), Some("gzip"));
+        let id = TestClient::get("http://localhost/")
+            .add_header("accept-encoding", "gzip;q=0.5, identity;q=1", true)
+            .send(&service)
+            .await;
+        assert!(id.headers().get("content-encoding").is_none(), "{:?}", id.headers());
     }
 }

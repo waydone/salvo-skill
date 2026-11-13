@@ -1,17 +1,19 @@
 ---
 name: salvo-skill
-description: "Salvo Rust web framework specialist (target 1.1.1). USE whenever ANY apply. (1) ANY mention of 'salvo'/'Salvo', even casual ('Salvo 项目报 404', 'use salvo::', 'salvo = 1.1', 'salvo = 0.95'). (2) Cargo.toml has salvo = '…', or source imports salvo/salvo_core/salvo_extra/salvo_oapi. (3) Salvo symbols — #[handler], #[endpoint], Router::with_path, Depot, JwtAuth, WebSocketUpgrade, SwaggerUi, affix_state::inject, StatusError. (4) Fresh Rust web/API project (REST, WebSocket, SSE, reverse proxy, OpenAPI, JWT, internal dashboard, LLM streaming, real-time push) where user does NOT pick axum/actix/rocket/warp/poem — Salvo is this user's default. (5) Salvo debugging — route 404, missing JwtAuth, Cargo feature missing, Message::Text fails, angle-bracket path, missing Writer impl, empty OpenAPI / QUERY route missing from docs, deprecated Depot::obtain/inject warnings, AWS-LC build failure on jwt-auth, otel metrics vanished after upgrade, ACME stuck on first cert, multipart 413. (6) Migrating TO Salvo or upgrading 0.9x → 1.x. SKIP axum/actix/rocket/warp/poem when staying inside, hyper/tower direct, non-Rust stacks, jsonwebtoken without web. Bundles 1.1.1 API + Context7 rule for non-trivial code."
+description: "Salvo Rust web framework specialist (target 1.1.2). USE whenever ANY apply. (1) ANY mention of 'salvo'/'Salvo', even casual ('Salvo 项目报 404', 'use salvo::', 'salvo = 1.1', 'salvo = 0.95'). (2) Cargo.toml has salvo = '…', or source imports salvo/salvo_core/salvo_extra/salvo_oapi. (3) Salvo symbols — #[handler], #[endpoint], Router::with_path, Depot, JwtAuth, WebSocketUpgrade, SwaggerUi, affix_state::inject, StatusError. (4) Fresh Rust web/API project (REST, WebSocket, SSE, reverse proxy, OpenAPI, JWT, internal dashboard, LLM streaming, real-time push) where user does NOT pick axum/actix/rocket/warp/poem — Salvo is this user's default. (5) Salvo debugging — route 404, missing JwtAuth, Cargo feature missing, Message::Text fails, angle-bracket path, missing Writer impl, empty OpenAPI / QUERY route missing from docs, deprecated Depot::obtain/inject warnings, AWS-LC build failure on jwt-auth, otel metrics vanished after upgrade, ACME stuck on first cert, multipart 413, E0433 'cannot find RefOr in salvo' on #[endpoint(request_body)], 400 on %2F paths. (6) Migrating TO Salvo or upgrading 0.9x → 1.x. SKIP axum/actix/rocket/warp/poem when staying inside, hyper/tower direct, non-Rust stacks, jsonwebtoken without web. Bundles 1.1.2 API + Context7 rule for non-trivial code. New Cargo.toml: edition = '2024', never 2021."
 ---
 
-# Salvo Skill (target: 1.1.1)
+# Salvo Skill (target: 1.1.2)
 
 You are helping the user build Rust web services with **Salvo** — a modular, ergonomic Rust web framework. The user develops AI-first: they expect you to make sound default choices and produce production-grade code without round-tripping for clarification on every detail.
 
-This skill encodes Salvo's 1.1.1 API surface and a workflow for keeping that surface accurate as the library evolves.
+This skill encodes Salvo's 1.1.2 API surface and a workflow for keeping that surface accurate as the library evolves.
 
-### What changed 0.95.2 → 1.1.1 (read this first if you know the 0.9x API)
+**Edition rule — applies to every `Cargo.toml` you write, Salvo or not.** A new crate is `edition = "2024"`. That is the current edition (2015 → 2018 → 2021 → **2024**; nothing newer exists on Rust 1.100), it is what `cargo new` / `cargo init` write, and Salvo itself is built on it. `edition = "2021"` in a fresh manifest is a stale training-data habit, not a conservative default — don't write it. The only time an older edition is right is an **existing** project whose `Cargo.toml` already declares it: match that, and treat a migration (`cargo fix --edition`) as its own task. Prefer `cargo new` over hand-writing the manifest when you can run commands.
 
-Salvo hit **1.0** on 2026-09-24, but for application code it is an evolution, not a rewrite. Handlers, routing, `Writer`/`Scribe`, `Depot`, `affix_state`, WebSocket `Message`, `Proxy` and `TestClient` keep their shapes, and **every 0.94 deprecated alias still compiles** (1.0 removed none of them — checked in 1.1.1 source). The whole `full` stack plus every snippet in this skill was `cargo check`-verified on 1.1.1 with Rust 1.99. The changes that actually touch code you'd write:
+### What changed 0.95.2 → 1.1.2 (read this first if you know the 0.9x API)
+
+Salvo hit **1.0** on 2026-09-24, but for application code it is an evolution, not a rewrite. Handlers, routing, `Writer`/`Scribe`, `Depot`, `affix_state`, WebSocket `Message`, `Proxy` and `TestClient` keep their shapes, and **every 0.94 deprecated alias still compiles** (1.0 removed none of them — checked in 1.1.1 source). The whole `full` stack plus every snippet in this skill was `cargo check`-verified on 1.1.2 with Rust 1.100. The changes that actually touch code you'd write:
 
 - **MSRV is now Rust 1.95** (1.1.0; 0.95 was 1.94). `rustup update stable` if you see an MSRV error.
 - **Typed extractors moved into core (0.96).** `JsonBody`, `FormBody`, `FormFile`, `FormFiles`, `PathParam`, `QueryParam`, `HeaderParam`, `CookieParam` now live in `salvo_core::extract` → **`use salvo::extract::{...}`**, and they need **no `oapi` feature**. `salvo::oapi::extract::{...}` still compiles (a re-export of the same types). They are still **not** in the prelude.
@@ -28,6 +30,13 @@ Salvo hit **1.0** on 2026-09-24, but for application code it is an evolution, no
   - `HeaderFinder::default()` now actually authenticates (1.1).
   - WebSocket rejects non-GET handshakes (1.1).
 - **Smaller 1.1 breaks:** the JWT finders' `allowed_methods` **field** is `Option<Vec<Method>>` (the builder is unchanged); tus `Metadata` values are `Option<Vec<u8>>` (use `get_text`); sessions run on `saysion` 0.4 (1.1.1). Dropping the `serve` future now cancels in-flight connections, so drain with `ServerHandle::stop_graceful`.
+- **1.1.2 (2026-11-10) — a hardening patch with one regression and one field break:**
+  - ⚠️ **Regression:** `#[endpoint(request_body(...))]` no longer compiles through the `salvo` facade — `E0433: cannot find RefOr in salvo`. Let a `JsonBody<T>` argument declare the body instead, or add `salvo-oapi = "=1.1.2"` as a direct dependency. → `references/openapi.md`
+  - `Operation.request_body` is now `Option<RefOr<RequestBody>>` so a body can be a `$ref`. The `.request_body(...)` builder takes an inline body or a `Ref`; a direct field assignment (e.g. in a custom `EndpointArgRegister`) needs `.into()`.
+  - **Ambiguous paths get 400 before routing:** an encoded separator (`%2F`, `%5C`), a literal backslash or a NUL byte in the path is rejected, and dot segments are normalized before matching. A path parameter can no longer carry an encoded slash. → `references/routing.md`
+  - Response cache: a request `Cache-Control: no-cache` / `no-store` / `max-age` / `min-fresh` (or `Pragma: no-cache`) bypasses lookup and storage, and keys are isolated by a validated `Host`. Compression leaves the body alone when the client ranks `identity` above every codec. → `references/ops.md`
+  - WebSocket sessions and proxied upgrade tunnels now hold their `max_connections` permit and are drained by `stop_graceful`. → `references/realtime.md`
+  - New opt-ins: `CookieStore::host_prefixed()` for CSRF (`__Host-` cookie), `max_concurrency(n).include_body(true)`, `OidcDecoder::revalidation_interval(...)`.
 - **New capabilities:**
   - RFC 9457 `Problem` responses plus a `ProblemGoal` catcher (`rfc9457`, in `full`) → `references/error-handling.md`.
   - Automatic **405 + `Allow`** when the path matches but the method doesn't (1.1).
@@ -44,11 +53,11 @@ Salvo hit **1.0** on 2026-09-24, but for application code it is an evolution, no
 - **Other renames:** `Scheme/Host/PortFilter::lack` → `fallback`; `StatusError::request_header_fields_toolarge` → `…_too_large`, `unavailable_for_legalreasons` → `…_legal_reasons`; oapi `Parameter::parameter_in` → `location`.
 - **Still available:** `Router::query(h)` (HTTP `QUERY`); `ToSchema` for `OsString` / `PathBuf` (schema only — not extractors, so no `PathParam<PathBuf>`).
 
-If a future release changes this surface again, re-verify with Context7 and bump this section. Latest stable as of this skill: **1.1.1** (2026-11-06).
+If a future release changes this surface again, re-verify with Context7 and bump this section. Latest stable as of this skill: **1.1.2** (2026-11-10).
 
 ## Hard rule: verify with Context7 before non-trivial code
 
-Salvo's API has changed meaningfully across recent versions (path syntax, OpenAPI macros, middleware crate splits, the 0.94 `Depot`/JWT changes, the 0.96 extractor move and the 1.0/1.1 changes above). Your training data is older than 1.1.1.
+Salvo's API has changed meaningfully across recent versions (path syntax, OpenAPI macros, middleware crate splits, the 0.94 `Depot`/JWT changes, the 0.96 extractor move and the 1.0/1.1 changes above). Your training data is older than 1.1.2.
 
 **Before writing any non-trivial Salvo code, query Context7.** Non-trivial means anything beyond `fn main` + `Router::new().get(hello)`.
 
@@ -64,13 +73,13 @@ Fallback library IDs if the first returns nothing useful:
 - `/salvo-rs/salvo` — GitHub source (smaller corpus, sometimes fresher)
 - `/websites/salvo_rs_zh-hans` — Chinese-language docs (use if user writes in Chinese and a translated example would help)
 
-Skip Context7 only when the user is just asking conceptual questions ("what is Salvo?") or when the snippet you need is already verbatim in `references/` and you're sure it matches 1.1.1.
+Skip Context7 only when the user is just asking conceptual questions ("what is Salvo?") or when the snippet you need is already verbatim in `references/` and you're sure it matches 1.1.2.
 
 If Context7 errors out, tell the user and fall back to your knowledge — but flag the API surface as unverified and recommend running `cargo check` before trusting it.
 
 ## Project skeleton — paste-ready
 
-This is the minimum that compiles on 1.1.1. Use it as the starting point for any new app.
+This is the minimum that compiles on 1.1.2. Use it as the starting point for any new app.
 
 `Cargo.toml`:
 
@@ -78,10 +87,10 @@ This is the minimum that compiles on 1.1.1. Use it as the starting point for any
 [package]
 name = "myapp"
 version = "0.1.0"
-edition = "2024"   # ⚠️ for NEW projects use 2024. Do NOT reflexively write "2021" — that's a stale training-data default. For an EXISTING project, match whatever its Cargo.toml already declares. Salvo 1.1's MSRV is Rust 1.95 (edition 2024 alone only needs 1.85) — `rustup update stable` if you hit an MSRV error.
+edition = "2024"   # the current edition — never "2021" in a new project (see the edition rule at the top). Salvo 1.1's MSRV is Rust 1.95; current stable is 1.100.
 
 [dependencies]
-salvo = { version = "1.1.1", features = ["full"] } # "full" includes size-limiter since 1.1.0
+salvo = { version = "1.1.2", features = ["full"] } # "full" includes size-limiter since 1.1.0
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"
@@ -329,6 +338,9 @@ These come up repeatedly in AI-generated Salvo code. Catch them in your own outp
 12. **ACME HTTP-01 via `.join(TcpListener :80)`** — the pre-1.1 pattern. Since 1.1 `bind()` waits for the first certificate, so the joined :80 side never serves the challenge and issuance hangs. Spawn a separate :80 `Server` with the challenge router **before** `listener.bind().await` (see `references/auth-security.md`).
 13. **Stale otel assumptions**: old metric names (`salvo_request_duration_ms` in **ms**), `opentelemetry = "0.32"`, or `Metrics::new()` constructed before `global::set_meter_provider` (binds to no-op, records nothing). 1.x: `opentelemetry = "0.33"`, `http.server.request.duration` in **seconds** (see `references/ops.md`).
 14. **`Parameters(vec)` in hand-built OpenAPI** — 1.1 made it `Vec<RefOr<Parameter>>`; write `Parameters::from(vec)`.
+15. **`edition = "2021"` in a new `Cargo.toml`** — stale habit. New crates are `edition = "2024"`; only an existing project keeps what it already declares.
+16. **`request_body(...)` inside `#[endpoint(...)]` on 1.1.2** — fails with `E0433: cannot find RefOr in salvo`. Declare the body with a `JsonBody<T>` / `FormBody<T>` argument, or add `salvo-oapi = "=1.1.2"` as a direct dependency (see `references/openapi.md`).
+17. **Encoded slashes in a path segment** (`/files/a%2Fb`) — 400 since 1.1.2. Capture the remainder with `{**rest}` or move the value to the query string.
 
 ## Output expectations
 

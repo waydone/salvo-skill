@@ -44,6 +44,8 @@ let app = Router::new().hoop(max_concurrency(100)).push(/* */);
 
 Bounds in-flight requests. When no permit is available, excess requests get a **429** with "max concurrency reached".
 
+By default the permit is released as soon as the handler returns, so a slow streamed body no longer counts against the limit. Since **1.1.2** `max_concurrency(100).include_body(true)` keeps the permit until the response body has been produced (finished, errored or dropped) — use it when the expensive part is the stream itself (SSE, large downloads, LLM token streams). Hoop it *outside* any body-producing middleware. It does not cover upgraded protocols (WebSocket) or physical connections — that is `Server::max_connections`.
+
 ## Compression (feature `compression`)
 
 ```rust
@@ -59,7 +61,7 @@ let comp = Compression::new()
 let app = Router::new().hoop(comp).get(home);
 ```
 
-Salvo exposes one top-level `compression` feature; enable only if you actually serve compressible responses — compile time matters. 1.1 behavior: responses (or requests) carrying `Cache-Control: no-transform` are passed through untouched, partial (`206`/range) responses are never compressed, trailers are preserved, and queued compression work is cancelled when the client disconnects.
+Salvo exposes one top-level `compression` feature; enable only if you actually serve compressible responses — compile time matters. 1.1 behavior: responses (or requests) carrying `Cache-Control: no-transform` are passed through untouched, partial (`206`/range) responses are never compressed, trailers are preserved, and queued compression work is cancelled when the client disconnects. Since 1.1.2 an explicit client preference for `identity` is honored: `Accept-Encoding: gzip;q=0.5, identity;q=1` gets the uncompressed body (before, the codec won regardless).
 
 `min_length` is critical: compressing a 50-byte response loses bytes, doesn't gain them.
 
@@ -90,7 +92,7 @@ async fn main() {
 `stop_graceful(None)` — wait indefinitely.
 `stop_forceful()` — drop everything immediately (no graceful behavior). Renamed in 0.94 from `stop_forcible`, which still compiles as a deprecated alias. Exists on both `Server` and `ServerHandle`.
 
-To cap concurrent connections (backpressure under load), build the server with `Server::new(acceptor).max_connections(n)` (since 0.94); excess connections wait for a slot.
+To cap concurrent connections (backpressure under load), build the server with `Server::new(acceptor).max_connections(n)` (since 0.94); excess connections wait for a slot. Since 1.1.2 a WebSocket session or a proxied upgrade tunnel keeps its connection's permit until the upgraded task ends, so long-lived sockets count against `n` — size the limit for them.
 
 ⚠️ **Dropping the `serve` future cancels in-flight work (1.1).** If you race `server.serve(router)` inside your own `tokio::select!` and the other branch wins, the dropped future now cancels every accepted connection task — pending handlers and idle keep-alives included. For draining, keep `serve` running and call `handle.stop_graceful(...)` as shown above.
 
@@ -125,6 +127,13 @@ let app = Router::new().hoop(cache).get(expensive_list);
 
 `RequestIssuer` decides the cache key — by default **all five parts** (scheme/authority/path/query/method) are included, so requests arriving under a different Host header get separate cache entries; each part is toggleable via the builder. Implement `CacheIssuer` for per-user keys. Don't put it in front of authenticated, user-specific responses with the default issuer — everyone would share one entry.
 
+1.1.2 tightened what gets cached (all verified against the middleware):
+
+- **Request directives bypass the cache.** A request carrying `Cache-Control: no-cache`, `no-store`, `max-age` or `min-fresh` (or legacy `Pragma: no-cache`) skips both lookup and storage and always reaches the handler. Handy for a forced refresh; also means a client can opt out of your cache, so it is not a load shield on its own — pair it with a rate limiter.
+- **Host isolation is strict.** For ordinary origin-form requests the key uses the `Host` header; a missing, repeated or invalid `Host` disables caching for that request rather than sharing an entry.
+- **Headers set by outer middleware are part of the entry's context.** An entry is replayed only when the headers already on the response before the cache ran still match, so a per-request header written by an *outer* hoop (request id, trace id) reduces hits — add such headers after the cache, i.e. hoop them outside and write them once `call_next` returns.
+- This is response memoization, not an HTTP cache: no `Age`, no conditional revalidation. A custom `CacheStore` must keep the `CachedEntry` it was given intact (clone it, or persist `outer_header_context()` and restore it with `with_outer_header_context(...)`), otherwise its entries are never reused.
+
 ## OpenTelemetry (feature `otel`)
 
 Salvo ships first-party OTel middleware: `salvo::otel::Tracing` (spans per request) and `salvo::otel::Metrics` (HTTP server metrics). Since **1.0** both follow the **OpenTelemetry HTTP semantic conventions**. Pair with the `opentelemetry` crate (and `opentelemetry-otlp` to export):
@@ -142,7 +151,7 @@ let router = Router::new()
 
 ⚠️ **Order matters:** `Metrics::new()` registers its instruments on whichever global meter provider is installed **at construction time**. Build it before `global::set_meter_provider(...)` and it binds to the no-op provider and silently records nothing.
 
-What gets emitted (1.0+, from salvo-otel 1.1.1 source):
+What gets emitted (1.0+, from salvo-otel 1.1.2 source):
 - **Metrics** (instrumentation scope `salvo-otel`, versioned, with the semconv schema URL): `http.server.request.duration` (histogram, **seconds** — Prometheus shows `http_server_request_duration_seconds`), `http.server.active_requests`, `http.server.request.body.size`, `http.server.response.body.size`. The pre-1.0 names `salvo_request_duration_ms` / `salvo_request_count` / `salvo_error_count` are **gone** — repoint dashboards; count requests via the histogram's `_count`, errors via `error.type` / `http.response.status_code`.
 - **Dimensions**: `http.route` (the matched template, e.g. `/users/{id}`; needs the default-on `matched-path` feature; absent when nothing matched) instead of the unbounded `url.full`; `error.type` for 5xx; methods outside RFC 9110/5789 become `_OTHER` (widen with `Metrics::with_known_methods([...])` / `Tracing::with_known_methods([...])`).
 - **Spans** are named `{method} {route}` (`GET /users/{id}`), carry `url.path` + a `url.query` with signature-style values (`sig`, `Signature`, `AWSAccessKeyId`, `X-Goog-Signature`) redacted, `client.address` + `client.port` split, and set an error status only for 5xx.

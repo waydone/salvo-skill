@@ -4,7 +4,7 @@ Salvo ships a `TestClient` that drives a `Service` in-process — no real socket
 
 ```toml
 [dev-dependencies]
-salvo = { version = "1.1.1", features = ["test"] }
+salvo = { version = "1.1.2", features = ["test"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde_json = "1"
 ```

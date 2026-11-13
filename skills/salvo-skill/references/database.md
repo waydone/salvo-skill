@@ -6,7 +6,7 @@ Salvo doesn't bundle an ORM. Pick one and inject the connection pool via `affix_
 
 ```toml
 [dependencies]
-salvo = { version = "1.1.1", features = ["oapi", "logging", "affix-state"] }
+salvo = { version = "1.1.2", features = ["oapi", "logging", "affix-state"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "chrono", "uuid"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }

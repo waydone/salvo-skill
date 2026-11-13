@@ -66,11 +66,21 @@ Router::with_path("links")
 | `.get(h)` / `.post(h)` / etc | The handler runs **only if** the method matches AND no further sub-path. Most cases. |
 | `.goal(h)` | Matches **anything** at this node — any method, any sub-path. Use for catch-alls and WebSocket upgrade paths (`Router::with_path("ws").goal(connect)`). |
 
-There is no `Router::handle(...)` (still true in 1.1.1). `.goal` is a footgun if used by accident — it'll swallow paths you didn't expect. When in doubt, use `.get` / `.post` / etc.
+There is no `Router::handle(...)` (still true in 1.1.2). `.goal` is a footgun if used by accident — it'll swallow paths you didn't expect. When in doubt, use `.get` / `.post` / etc.
 
 There is a first-class shortcut for the HTTP **`QUERY`** method (a safe, body-carrying read used by some search APIs): `Router::with_path("search").query(search_handler)` (and the matching `filters::query()`). Use it directly — you don't need the `filter_fn` custom-method workaround for QUERY. OpenAPI: since 1.0 a `QUERY` route **is** emitted into the generated doc, but **only** when the document declares OpenAPI 3.2 — in the default 3.1 doc it is skipped with a `tracing::warn!` (see `references/openapi.md`).
 
 **405 / `Allow` (1.1):** when a path matches but the method doesn't, Salvo answers **405** with an `Allow` header computed from the built-in method filters on that path. If only opaque filters (e.g. a `filter_fn` method check like the `LINK` example above) guard the path, Salvo can't infer the methods and falls back to **404** — add your own 405 + `Allow` in middleware if clients need it.
+
+## Path normalization and rejected paths (1.1.2)
+
+Before any route is matched, Salvo normalizes dot segments (`.` / `..`, including percent-encoded forms) and **rejects ambiguous paths with `400 Bad Request`**: an encoded separator (`%2F`, `%5C`), a literal backslash, or a NUL byte anywhere in the path (on Windows also colon-bearing segments and reserved device names). The point is that a later decode — in a static-file handler, a proxy, your own code — can no longer move a request outside the scope the router authorized.
+
+What it means for route design:
+
+- `GET /files/a%2Fb` no longer reaches a `files/{name}` handler with `name = "a/b"` — it is a 400 (verified with `TestClient`). To accept nested names, capture the tail with `files/{**rest}` and let the client send real slashes, or pass the value in the query string / body.
+- IDs that may contain `/` (object-store keys, some base64) must be encoded as base64url or sent outside the path.
+- The 400 is produced before your hoops run, so it does not show up in handler-level metrics or auth logs.
 
 ## Nesting (`push`)
 

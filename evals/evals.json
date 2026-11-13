@@ -46,7 +46,7 @@
     {
       "id": 2,
       "name": "jwt-protected-endpoint",
-      "prompt": "我有一个 Salvo 项目（1.1.1），已经有 /login 这个公开 endpoint。现在我要加一个受保护的 /me endpoint，规则是：\n- 客户端必须在 Authorization: Bearer <token> 里带 HS256 JWT\n- 校验通过后返回 token 里的 sub 字段\n- 校验失败返回 401\n\n请只给我「需要新增/修改的代码片段」（包括 Cargo.toml 改动、JWT 中间件构造、handler、router 接入），不要重复完整的 main.rs 框架。",
+      "prompt": "我有一个 Salvo 项目（1.1.2），已经有 /login 这个公开 endpoint。现在我要加一个受保护的 /me endpoint，规则是：\n- 客户端必须在 Authorization: Bearer <token> 里带 HS256 JWT\n- 校验通过后返回 token 里的 sub 字段\n- 校验失败返回 401\n\n请只给我「需要新增/修改的代码片段」（包括 Cargo.toml 改动、JWT 中间件构造、handler、router 接入），不要重复完整的 main.rs 框架。",
       "expected_output": "Cargo.toml 新增 jwt-auth feature、ConstDecoder + HeaderFinder 配置、JwtAuth 中间件挂在 /me 路由上、handler 用 depot.jwt_auth_data::<Claims>() 取 claim、错误返回 StatusError::unauthorized()。**不要**重复完整 main.rs。",
       "files": [],
       "assertions": [

@@ -54,7 +54,7 @@ For single-binary deployments, use `rust-embed`:
 ```toml
 [dependencies]
 rust-embed = "8"
-salvo = { version = "1.1.1", features = ["serve-static"] }
+salvo = { version = "1.1.2", features = ["serve-static"] }
 mime_guess = "2"
 ```
 
@@ -172,3 +172,5 @@ let app = Router::new()
 For large uploads that must survive connection drops (mobile clients, multi-GB files), Salvo ships a [tus.io](https://tus.io) protocol handler (`tus` feature, included in `full`) with a disk store — clients like `tus-js-client` then handle chunking/resume automatically. See the official `upload-files-tus` example and verify the current builder API with Context7 before use.
 
 ⚠️ **1.1 break:** tus `Metadata` values are now `Option<Vec<u8>>` (were `Option<String>`) so binary metadata survives. Use `Metadata::get_text(...)` for strict UTF-8 access; custom stores/hooks convert text with `.into_bytes()`. `DiskStore` still reads old string records but writes byte arrays that **pre-1.1 versions cannot read** — don't roll back after upgrading. Also new in 1.1: completion hooks fire when a PATCH finishes the upload, failed writes are rolled back, and expiration only applies to unfinished uploads.
+
+**Cancelled PATCH (documented in 1.1.2):** the offset persisted in the upload's metadata is the committed boundary, and a PATCH whose response was lost may still have committed. A client must `HEAD` the upload and resume from the returned `Upload-Offset` — never blindly resend from the previous offset (standard tus clients already do this). `DiskStore` does not garbage-collect files left by a cancelled finalization and makes no power-loss durability promise; a custom `DataStore` driven outside the built-in handler needs its own per-upload locking.

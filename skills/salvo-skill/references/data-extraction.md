@@ -114,7 +114,7 @@ async fn h(req: &mut Request) -> Result<String, StatusError> {
 - `parse_headers::<T>()` — headers (sync)
 - `parse_cookies::<T>()` — cookies (sync, cookie feature)
 
-There is **no `parse_msgpack`** (still absent in 1.1.1) — for MessagePack, read `req.payload().await` and decode with `rmp-serde` yourself.
+There is **no `parse_msgpack`** (still absent in 1.1.2) — for MessagePack, read `req.payload().await` and decode with `rmp-serde` yourself.
 
 **`.await` gotcha:** only the body parsers (`parse_json` / `parse_form` / `parse_body`) are `async` — `.await` them. The non-body family (`parse_queries` / `parse_params` / `parse_headers` / `parse_cookies`) is **synchronous** — call without `.await`: `let q: MyQuery = req.parse_queries()?;`. Over-awaiting them is `E0277` (Result is not a Future).
 

@@ -70,11 +70,13 @@ Since `jsonwebtoken` went to v11, the JWT stack must pick a crypto provider, and
 
 Same `JwtAuth` API either way — only the Cargo feature differs.
 
-⚠️ **`aws-lc-rs` is a *default* feature of `salvo`, and `full` lists it too.** So swapping `jwt-auth` → `jwt-auth-ring` steers *JWT* to RustCrypto but does **not** remove AWS-LC from the graph. If AWS-LC itself is the thing that won't build, turn the defaults off and pick the ring backend explicitly — `salvo = { version = "1.1.1", default-features = false, features = ["server", "http1", "http2", "jwt-auth-ring", "rustls", "ring", ...] }` (re-add any other defaults you use: `cookie`, `matched-path`, `test`, …). Check with `cargo tree -i aws-lc-rs` — it should report nothing.
+⚠️ **`aws-lc-rs` is a *default* feature of `salvo`, and `full` lists it too.** So swapping `jwt-auth` → `jwt-auth-ring` steers *JWT* to RustCrypto but does **not** remove AWS-LC from the graph. If AWS-LC itself is the thing that won't build, turn the defaults off and pick the ring backend explicitly — `salvo = { version = "1.1.2", default-features = false, features = ["server", "http1", "http2", "jwt-auth-ring", "rustls", "ring", ...] }` (re-add any other defaults you use: `cookie`, `matched-path`, `test`, …). Check with `cargo tree -i aws-lc-rs` — it should report nothing.
 
 **rustls provider selection (1.0+):** Salvo now builds every rustls config with an **explicit** `CryptoProvider` chosen from its own `aws-lc-rs` / `ring` features, so the old runtime panic *"Could not automatically determine the process-level `CryptoProvider`"* (from `RustlsListener` / `QuinnListener` / `AcmeListener` / the proxy's `HyperClient` when another crate enabled the other rustls backend) is gone. If you call `CryptoProvider::install_default` yourself, Salvo uses that. To make other rustls-based crates agree with Salvo, pass them `salvo::conn::rustls::default_crypto_provider()`.
 
 **jsonwebtoken still can't auto-select with both JWT providers enabled.** If both `jwt-auth` and `jwt-auth-ring` end up on (e.g. via a workspace member), call `salvo::jwt_auth::install_crypto_provider()` at the start of `main`, or token validation panics at runtime.
+
+**OIDC / JWKS (`OidcDecoder`, 1.1.2):** cached provider keys now have a bounded lifetime that follows the JWKS response's `Cache-Control` (`max-age`, `stale-while-revalidate`, `stale-if-error`, each capped at 30 days; with no directives a key is reused for at most ~61 s). `no-cache` / `no-store` on the JWKS response means a network validation per token, rate-limited by a shared one-second cooldown during which lookups **fail closed** — if your IdP really sends those, opt out with `OidcDecoder::new(issuer, audience).await?.revalidation_interval(Duration::ZERO)`. A removed key stays valid until its cached copy expires, so short `max-age` on the IdP side is what bounds revocation. Verify the builder with Context7 before use.
 
 ## Basic auth (feature `basic-auth`)
 
@@ -84,7 +86,7 @@ use salvo::basic_auth::{BasicAuth, BasicAuthValidator};
 
 struct Validator;
 
-// No #[async_trait] — BasicAuthValidator uses native RPITIT (async fn in trait) (still in 1.1.1); adding it fails E0195.
+// No #[async_trait] — BasicAuthValidator uses native RPITIT (async fn in trait) (still in 1.1.2); adding it fails E0195.
 impl BasicAuthValidator for Validator {
     async fn validate(&self, username: &str, password: &str, _depot: &mut Depot) -> bool {
         username == "admin" && password == "secret"
@@ -157,6 +159,8 @@ let app = Router::new().hoop(csrf).get(form_page).post(submit);
 
 The default skipper is `req.method().is_safe()`: it skips `GET` / `HEAD` / `OPTIONS` / `TRACE` and validates **every** other method — `POST` / `PUT` / `PATCH` / `DELETE`, and (since 1.1) also `CONNECT` and extension methods. If saving a new or rotated token fails, the middleware now returns **500** instead of running your handler with an unsaved token. In templates, read `depot.csrf_token()` (via `CsrfDepotExt`) and put it in a hidden form field named to match the finder.
 
+**Prefer `CookieStore::host_prefixed()` on HTTPS sites (1.1.2).** It issues the token as `__Host-salvo.csrf` with `Secure`, `HttpOnly`, `Path=/` and no `Domain`, which browsers refuse to let a sibling subdomain overwrite — closing the cookie-injection hole of the plain double-submit cookie. `Secure` is set explicitly, so it also works behind a TLS-terminating proxy where the internal hop is HTTP; it will **not** work on a plain-HTTP site (the browser drops the cookie — keep `CookieStore::new()` for local HTTP dev). Changing its `domain`, `path` or `secure` afterwards makes the store fail closed (save errors → 500). Neither cookie store binds the token to the login session: when the app already has server-side sessions, use `salvo::csrf::SessionStore` (already included by the facade's `csrf` feature; add `session` for the handler) with `SessionHandler` hooped before `Csrf`.
+
 ## Rate limiting (feature `rate-limiter`)
 
 ```rust
@@ -224,4 +228,4 @@ Server::new(acceptor).serve(router).await;
 http_task.abort();
 ```
 
-The CA validates HTTP-01 over plain HTTP on **port 80**, so a :80 listener serving the challenge router is mandatory. ⚠️ The pre-1.1 pattern — `http01_challenge(&mut router)` + `listener.join(TcpListener::new("0.0.0.0:80")).bind().await` — no longer works on first issuance: `bind()` now blocks on certificate issuance, but the joined :80 side doesn't serve until `bind()` returns, so validation never completes (the `http01_challenge` source doc says: "Serve `router` on port 80 before awaiting this listener's bind. Initial certificate issuance waits for the CA to read that challenge route."). This mirrors the official 1.1.1 `acme-http01` example. For DNS-01 / TLS-ALPN-01, no port 80 is needed.
+The CA validates HTTP-01 over plain HTTP on **port 80**, so a :80 listener serving the challenge router is mandatory. ⚠️ The pre-1.1 pattern — `http01_challenge(&mut router)` + `listener.join(TcpListener::new("0.0.0.0:80")).bind().await` — no longer works on first issuance: `bind()` now blocks on certificate issuance, but the joined :80 side doesn't serve until `bind()` returns, so validation never completes (the `http01_challenge` source doc says: "Serve `router` on port 80 before awaiting this listener's bind. Initial certificate issuance waits for the CA to read that challenge route."). This mirrors the official 1.1.2 `acme-http01` example. For DNS-01 / TLS-ALPN-01, no port 80 is needed.
