@@ -1,7 +1,7 @@
 {
   "name": "salvo-skill",
   "owner": { "name": "waydone", "email": "coco18889@icloud.com" },
-  "metadata": { "description": "Salvo (Rust web framework) specialist skill — target 1.1.2", "version": "0.1.6" },
+  "metadata": { "description": "Salvo (Rust web framework) specialist skill — target 1.1.2", "version": "0.1.7" },
   "plugins": [
     {
       "name": "salvo-skill",

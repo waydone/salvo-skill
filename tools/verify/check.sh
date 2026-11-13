@@ -9,6 +9,7 @@ here="$(cd -- "$(dirname -- "$0")" && pwd)"
 skill="$here/../../skills/salvo-skill"
 manifest="$here/Cargo.toml"
 
+python3 -I "$here/check_edition.py" "$skill" "$manifest" || exit 1
 python3 -I "$here/gen_harness.py" "$skill" "$here/src" "$here/harness.json" || exit 1
 
 log="$here/target/check.log"
